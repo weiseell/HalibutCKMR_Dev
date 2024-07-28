@@ -1,7 +1,7 @@
 # HalibutCKMR_Dev
 
 Github repository for model development during Codeathon week July 19-Aug 2
-* does not contain simulation or kin identification scripts, just TMB/RTMB model development things
+* does not contain simulation or kin identification scripts currently, just TMB/RTMB model development things
 
 
 At the beginning of the workshop, the Github has:
@@ -15,4 +15,14 @@ At the beginning of the workshop, the Github has:
 - ModelFunction: has the functions that run within the compiled part of the model
   - prob_la: 
   - quant_la: 
-
+  
+Here are some proposed topics for what to cover during the codeathon:
+1. Revision of Babyn et al paper
+2. Intricacies of the HS version of the model
+ - Quantiles for length – maybe apply this to the POPs too?
+3. Grandparent/Grandchild problem for HS model
+4. Incorporating Incomplete Age Data
+5. Post-hoc probs for Age and mitochondrial data - related individuals
+6. Uncertainty/simulation testing framework
+7. Ne calculation inside CKMR framework
+8. Next steps
