@@ -1,10 +1,11 @@
 ### Just simulated Data input pop dyn test
 # random-walk abundance
 library(RTMB)
+library(offarray)
 
 #load simulated data inputs
-load("RTMB_Input/CensusSize_Sim_071224.rda")
-load("RTMB_Input/POPs_df_072224.rda")
+load("Inputs/CensusSize_Sim_071224.rda")
+load("Inputs/POPs_df_072224.rda")
 
 #source functions for RTMB model
 source("ModelFunction/prob_la.R")
@@ -12,10 +13,13 @@ source("ModelFunction/prob_la.R")
 Narray = array(CS_181_195$abundance,c(50,15,2))
 dat <- list()
 dat$Narray <- Narray
-dat$A <- 30
-dat$Y <- 15
+dat$A <- 2:30
+dat$POPY <- 1:15
+dat$SAMPY <- 9:15
 dat$Lvec <- seq(10,220,10)
-dat$la_key <- read.table("RTMB_Input/LA_MeanSD.txt",header = T, sep = "\t",stringsAsFactors = F)
+dat$LENGTH_CLASSES <- 1:length(dat$Lvec)
+dat$SEXES <- 1:2
+dat$la_key <- read.table("Inputs/LA_MeanSD.txt",header = T, sep = "\t",stringsAsFactors = F)
 
 #number of POPs and comps as array (from script 2 that processes sim results)
 dat$n_POP_sylasya <- nonzero
@@ -33,14 +37,10 @@ parm$log_init_abundance <- log(sum(Narray[-1,1,]))
 parm$log_Z <- c(0.1,0.1)
 #a and b values for the fecundity equations
 #!# fix these for now
-parm$log_fecF <- c(0.1,0.1)
-parm$log_fecM <- c(0.1,0.1)
+parm$log_bexp <- c(0.1,0.1)
 
-parm$log_fecF <- c(log(0.019),log(3.624))
-parm$log_fecM <- c(log(0.019),log(3.624))
-
-make_fecundity <- function(alpha,bexp,len){
-  alpha*len^bexp
+make_fecundity <- function(s,len){
+  (len/150)^bexp[s]
 }
 
 new_f <- function(parm){
@@ -49,39 +49,21 @@ new_f <- function(parm){
   #exp the sd
   rec_sd = exp(log_rec_sd)
   ##An array for male/female fecundity
-  log_fec = parm$log_Z
-  fecM <- exp(log_fecM)
-  fecF <- exp(log_fecF)
+  bexp <- exp(log_bexp)
+  
   ##Array for average fecundity by sex and age
   ## create prob_by_length array and then fecun array
-  fecun = array(0,c(A,2))
+  fecun = array(0,c(2,A))
   prob_len_at_age <- prob_la(Lmax = max(Lvec),
                              A = A, binsize = 10, 
                              dat = la_key)
   
-  for(s in 1:2){
-    if(s == 1){
-      alpha = fecM[1]
-      bexp = fecM[2]
-    }
-    if(s == 2){
-      alpha = fecF[1]
-      bexp = fecF[2]
-    }
-    fec_denom <- 0
-    for (a in 2:A) {
-      runfec <- 0
-      for (i in 1:length(Lvec)) {
-        #set L from length vector
-        l <- Lvec[i]
-        runfec <- runfec + prob_len_at_age[a-1,i,s] * make_fecundity(alpha,bexp,l)
-        fec_denom <- fec_denom + runfec
-      }
-      fecun[a,s] <- runfec
-    }
-    fecun[,s] <- fecun[,s]/fec_denom
-  }
-  
+  fec_sa <- autoloop(
+      s=SEXES, a=A, 
+      SUMOVER=list( lc=LENGTH_CLASSES), {
+    l <- Lvec[lc]
+    make_fecundity(s, l) * prob_len_at_age[l,a,s]
+  })
   
   ##Plus group for later
   N = array(0,c(A,Y,2))
@@ -119,75 +101,65 @@ new_f <- function(parm){
     }
   }
   
+  TRO_SY <- autoloop(
+      s=SEXES, y=POPDYN_YEARS,
+      SUMOVER( a=AGES),{
+    N[a,y,s] * fec_sa(s,a)    
+  })
+  
+  inv_TRO_SY <- 1/TRO_SY
+  
   ## nll using CKMR data
   Pr_MOP_SYLASYA <- array(0,c(2,Y,length(Lvec),A,2,Y,A))
   # generating the POP probabilities
-  ## issue: creation of negative birth years
-  for (s1 in 1:2) { # Sex of Parent
-    for (y1 in 1:Y) { # Sampling Years for Parents
-      for (l1 in 1:length(Lvec)) { # Length of Parent
-        for (a1 in 1:A) { # Age of Parent
-          for (s2 in 1:2) { #sex of the offspring
-            for (y2 in 1:Y) { # Sampling Year for Offspring
-              for (a2 in 1:A) { # Age of Offspring
-                #age of offspring
-                B2 <- y2-a2
-                B1 <- y1-a1
-                #probability of zero scenarios
-                if(y1 < B2){
-                  Prob <- 0
-                }
-                else if(B1 >= B2 | B2 <= 0) {
-                  Prob <- 0
-                }
-                
-                else{
-                  #####LENGTH-BASED NOT IMPLEMENTED YET - HOW TO??##
-                  #how to recalculate Linf based on a single value???
-                  #L_inf_A <- l1/(1-exp())
-                  #calculate the age at juvenile birth year
-                  #a_b2 <- a1 = (y1-B2)
-                  #calculate length at juvenile birth year
-                  #how to do this???
-                  #l_b2
-                  #get probability for the pair
-                  #Prob <- fecun(l_b2,s1)/TROgen[s1,B2]
+                # This does all ages for IDEAl measurement
+                # autoloop() both CREATES the array and FILLS IT IN
+                # looping over all the "equals" at the start
+                # This does the plus-group wrong. We will fix immediately afterwards...
+                Pr_POP_SYLAB <- autoloop( 
+                    s1=SEXES, y1=SAMP_YEARS, lc1=LENGTH_CLASSES, a1=AGES,
+                    b2=POPDYN_YEARS, {
+                  #sd that parent length is currently from the mean
                   
-                  #Prob <- fecun[B2,s1]/TROgen[B2,s1]
-                  #If parent was sampled before juv BY, need to adjust for survivas1l
-                  if(y1 < B2){
-                    ##Leading fraction is parents that survived to birth year
-                    ##Double check my indices!
-                    Prob <- (N[a1,B2,s1]/N[B1+y1,y1,s1])*fecun[a1,s1]/N[1,B2,s2]
-                  }else{
-                  Prob <- fecun[a1,s1]/N[1,B2,s2]
-                  }
-                }
-              Pr_MOP_SYLASYA[s1,y1,l1,a1,s2,y2,a2] <- Prob
-              }
-            }
-          }
-        }
-        #calculating the prob of being a particular age
-        #!# this is for half-sibs so it is turned off for now
-        #given sex, year, and length
-        #Pr_A_SYL <- array(0,c(A,length(Lvec),2,Y))
-        #Prob_denom <- 0
-        #for (a1 in 2:A) {
-          #!# again how to make this 'prob given length object??'
-        #  Prob_num <- prob_len_at_age[a1-1,l1,s1]*N[a1,y1,s1]
-        #  Prob_denom <- Prob_denom + Prob_num
-        #  Pr_A_SYL[a1,l1,s1,y1] <- Prob_num
-        #}
-        
-        #for (a1 in 2:A) {
-          # what does this do????
-        #  Pr_A_SYL[a1-1,l1,s1,y1] = Pr_A_SYL[a1-1,l1,s1,y1]/Prob_denom
-        #}
-      }
-    }
-  }
-  
+                  l1 <- actual_l[ lc1]
+                  sd1 <- (l1 - la_means_SA[s1,a1])/la_sd_SA[s1,a1]
+                  
+                  #age of parent when off is born
+                  a1_at_B2 <- a1 - (y1 - b2)
+                  #length of parent when offspring is born
+                  l1_at_B2 <- la_means_SA[s1,a1_at_B2] + sd1 * la_sd_SA[s1,a1_at_B2]
+                  
+                  #!# switch fecundity input from age-based to length-based in the fecundity
+                  Prob <- 
+                    (y1 >= b2) * # otherwise Molly was dead before Dolly born
+                    (a1_at_B2 >= 2) *
+                    feclen_fun(s1,l1_at_B2) * inv_TRO_SB[s1,B2]
+                })
+                
+                # PLUS GROUP FIXUP HERE
+                
+    num_Pr_A_SYL <- autoloop(
+      a=AGES, s=SEXES, y=SAMPY, lc=LENGTH_CLASSES,
+      prob_len_at_age[s,l,a] * N[s,y,a]
+    )              
+
+    denom_SYL <- sumover( 'a', num_Pr_A_SYL)
+    
+    Pr_a_SYL <- autoloop(
+      a=AGES, s=SEXES, y=SAMPY, lc=LENGTH_CLASSES,
+      num_Pr_a_SYL[ a, s, y, l] / denom_SYL[ s, y, l]
+    )
+    
+    Pr_POP_SYLSYL <- autoloop(
+      s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES, s2=SEXES, y2=SAMPY, lc2=LENGTH_CLASSES,
+      SUMOVER=list( a1= AGES, a2= AGES), 
+    {
+      b2 <- y2 - a2
+      Pr_POP_SYLAB[ s1, y1, lc1, a1, b2] *
+      Pr_a_SYL[ a1, s1, y1, lc1] *
+      Pr_a_SYL[ a2, s2, y2, lc2]
+    })
+ 
   ## adding likelihood based of POP composition
   # need to encompass all parts of the Prob vector
   # this one only has parent length, may need to add uncertain age?
