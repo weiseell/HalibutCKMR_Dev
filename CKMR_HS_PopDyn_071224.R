@@ -26,7 +26,7 @@ dat$la_key <- read.table("Inputs/LA_MeanSD.txt",header = T, sep = "\t",stringsAs
 
 #number of POPs and comps as array (from script 2 that processes sim results)
 dat$n_comps_HS_yaya <- n_comps_HS_yaya
-dat$ n_SO_kins_syaya<- n_SO_kins_syaya
+dat$n_SO_kins_syaya<- n_SO_kins_syaya
 
 ## create parameter list
 parm <- list()
@@ -190,6 +190,7 @@ new_f <- function(parm){
               pp_ERO_B2 <- pp_ERO_B2/denom
               
               # probability of shared parent??? Not exactly sure how all this comes together
+              #!# not right N?
               Pr_pp_is_1s_mum <- fecun[app,sp]/N[1,B1,sp]
               
               #putting the HSP probability together

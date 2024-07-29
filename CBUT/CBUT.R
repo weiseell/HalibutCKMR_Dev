@@ -3,16 +3,16 @@ library(TMB)
 library(tidyverse)
 
 #compile C++ section of model
-compile("Desktop/HalibutCKMR_Dev/CBUT/CBUT.cpp")
-dyn.load(dynlib("Desktop/HalibutCKMR_Dev/CBUT/CBUT"))
+compile("~/Desktop/HalibutCKMR_Dev/CBUT/CBUT.cpp")
+dyn.load(dynlib("~/Desktop/HalibutCKMR_Dev/CBUT/CBUT"))
 
 #load simulated data inputs
-load("Desktop/HalibutCKMR_Dev/Inputs/CensusSize_Sim_071224.rda")
-load("Desktop/HalibutCKMR_Dev/Inputs/POPs_df_072224.rda")
-la_key <- read.table("Desktop/HalibutCKMR_Dev/Inputs/LA_MeanSD.txt",header = T, sep = "\t",stringsAsFactors = F)
+load("~/Desktop/HalibutCKMR_Dev/Inputs/CensusSize_Sim_071224.rda")
+load("~/Desktop/HalibutCKMR_Dev/Inputs/POPs_df_072224.rda")
+la_key <- read.table("~/Desktop/HalibutCKMR_Dev/Inputs/LA_MeanSD.txt",header = T, sep = "\t",stringsAsFactors = F)
 
 #source functions for RTMB model
-source("Desktop/HalibutCKMR_Dev/ModelFunction/prob_la.R")
+source("~/Desktop/HalibutCKMR_Dev/ModelFunction/prob_la.R")
 
 ##Should they be centered around a midpoint?
 len_bins = seq(10,220,10)

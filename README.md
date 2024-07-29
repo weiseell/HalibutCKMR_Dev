@@ -13,8 +13,8 @@ At the beginning of the workshop, the Github has:
   - Census size from simulation
   - length/age mean and sd from Armsworthy and Campana 2010
 - ModelFunction: has the functions that run within the compiled part of the model
-  - prob_la: 
-  - quant_la: 
+  - prob_la: generates probability of length at age, sex separated
+  - quant_la: generates a given set of quantile length at age, sex separated
   
 Here are some proposed topics for what to cover during the codeathon:
 1. Revision of Babyn et al paper
@@ -24,5 +24,7 @@ Here are some proposed topics for what to cover during the codeathon:
 4. Incorporating Incomplete Age Data
 5. Post-hoc probs for Age and mitochondrial data - related individuals
 6. Uncertainty/simulation testing framework
+  - 
 7. Ne calculation inside CKMR framework
-8. Next steps
+8. Kinference
+9. Next steps
