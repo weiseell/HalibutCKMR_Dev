@@ -1,10 +1,9 @@
 ## length function
-prob_la <- function(Lmax = 250,A = 30,binsize = 5,dat = dat) {
+prob_la <- function(Lmax = 250,ages = 2:30,binsize = 5,dat = dat) {
   #set lenbins and ages vectors
   lenbins <- seq(1, Lmax, by = binsize)
-  ages <- seq(2,A)
   #empty array for probabilities
-  prob_len_at_age <- array(0,c(length(ages),length(lenbins),2))
+  prob_len_at_age <- array(0,c(2,length(lenbins),length(ages)))
   
   for (a in 1:length(ages)) {
     for (s in 1:2) {
@@ -15,15 +14,15 @@ prob_la <- function(Lmax = 250,A = 30,binsize = 5,dat = dat) {
       for (l in 1:length(lenbins)) {
         # first length bin
         if(l == 1){
-          prob_len_at_age[a,l,s] <- pnorm(lenbins[l],mean = tmp$mean,
+          prob_len_at_age[s,l,a] <- pnorm(lenbins[l],mean = tmp$mean,
                                           sd = tmp$sd)
           # maximum length bin
         } else if(l == length(lenbins)){
-          prob_len_at_age[a,l,s] <- 1 - pnorm(lenbins[l],mean = tmp$mean,
+          prob_len_at_age[s,l,a] <- 1 - pnorm(lenbins[l],mean = tmp$mean,
                                               sd = tmp$sd)
         }else{
           # all other length bins
-          prob_len_at_age[a,l,s] <- pnorm(lenbins[l],mean = tmp$mean,
+          prob_len_at_age[s,l,a] <- pnorm(lenbins[l],mean = tmp$mean,
                                           sd = tmp$sd) - pnorm(lenbins[l - 1],mean = tmp$mean,
                                                                sd = tmp$sd)
         }

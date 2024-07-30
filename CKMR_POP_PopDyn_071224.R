@@ -2,10 +2,14 @@
 # random-walk abundance
 library(RTMB)
 library(offarray)
+library(tidyverse)
+library(mvbutils)
+library(offartmb)
 
 #load simulated data inputs
 load("Inputs/CensusSize_Sim_071224.rda")
-load("Inputs/POPs_df_072224.rda")
+load("Inputs/Ncomp_POPs_SYLSYL_070924.rda")
+load("Inputs/NPOPs_SYLSYL_070924.rda")
 
 #source functions for RTMB model
 source("ModelFunction/prob_la.R")
@@ -15,18 +19,47 @@ dat <- list()
 dat$Narray <- Narray
 dat$A <- 2:30
 dat$POPY <- 1:15
-dat$SAMPY <- 9:15
+dat$SAMPY <- 10:15
 dat$Lvec <- seq(10,220,10)
 dat$LENGTH_CLASSES <- 1:length(dat$Lvec)
 dat$SEXES <- 1:2
 dat$la_key <- read.table("Inputs/LA_MeanSD.txt",header = T, sep = "\t",stringsAsFactors = F)
 
 #number of POPs and comps as array (from script 2 that processes sim results)
-dat$n_POP_sylasya <- nonzero
+dat$n_POP_SYLSYL <- n_POP_SYLSYL
+dat$n_comps_POP_SYLSYL <- n_comps_POP_SYLSYL
+
+#split la_key into arrays of means and sds
+raw_la_means_SA <- dat$la_key %>% 
+  arrange(sex,AgeClass) %>% 
+  select(sex,AgeClass,mean) %>% 
+  filter(AgeClass <= 30) %>% 
+  spread(AgeClass,mean) %>% 
+  select(-sex)
+
+raw_la_sd_SA <- dat$la_key %>% 
+  arrange(sex,AgeClass) %>% 
+  select(sex,AgeClass,sd) %>% 
+  filter(AgeClass <= 30) %>% 
+  spread(AgeClass,sd) %>% 
+  select(-sex)
+
+dat$la_means_SA <- offarray(as.matrix(raw_la_means_SA),dimseq=list( s=dat$SEXES, a=dat$A))
+dat$la_sd_SA <- offarray(as.matrix(raw_la_sd_SA),dimseq=list( s=dat$SEXES, a=dat$A))
+
+# create prob len at age array
+raw_prob_len_at_age <- prob_la(Lmax = max(dat$Lvec),
+                           ages = dat$A,
+                           binsize = 10,
+                           dat = dat$la_key)
+
+# Make it into offarray
+dat$prob_len_at_age <- offarray(raw_prob_len_at_age, 
+        dimseq=list( s=dat$SEXES, lc=dat$LENGTH_CLASSES, a=dat$A))
 
 ## create parameter list
 parm <- list()
-#log recruitement - random effect length Y
+#log recruitment - random effect length popdynyears
 parm$log_rec <- log(Narray[1,,1] + Narray[1,,2])
 parm$log_rec_sd = log(0.3)
 #parm$log_rec <- rep_len(x = 0.1, length.out = dat$Y)
@@ -34,17 +67,17 @@ parm$log_rec_sd = log(0.3)
 #parm$log_init_abundance <- 0.1
 parm$log_init_abundance <- log(sum(Narray[-1,1,]))
 # average log survival for M and F
-parm$log_Z <- c(0.1,0.1)
+parm$log_Z <- log(c(0.2,0.2))
 #a and b values for the fecundity equations
 #!# fix these for now
 parm$log_bexp <- c(0.1,0.1)
 
-make_fecundity <- function(s,len){
-  (len/150)^bexp[s]
-}
-
-new_f <- function(parm){
+new_f <- function(parm) reclasso( by=parm, {
   getAll(dat,parm)
+  
+  make_fecundity <- function(s,len){
+    (len/150)^bexp[s]
+  }
 
   #exp the sd
   rec_sd = exp(log_rec_sd)
@@ -53,179 +86,153 @@ new_f <- function(parm){
   
   ##Array for average fecundity by sex and age
   ## create prob_by_length array and then fecun array
-  fecun = array(0,c(2,A))
-  prob_len_at_age <- prob_la(Lmax = max(Lvec),
-                             A = A, binsize = 10, 
-                             dat = la_key)
+  
+  #prob_len_at_age <- autoloop(
+  #  s=SEXES, lc=LENGTH_CLASSES, a=AGES,
+  #  pnorm( ) - pnorm( )
+  #)
   
   fec_sa <- autoloop(
       s=SEXES, a=A, 
-      SUMOVER=list( lc=LENGTH_CLASSES), {
-    l <- Lvec[lc]
-    make_fecundity(s, l) * prob_len_at_age[l,a,s]
+      SUMOVER=list(lc=LENGTH_CLASSES), {
+    make_fecundity(s,Lvec[lc]) * prob_len_at_age[s,lc,a]
+        #((Lvec[lc]/150)^bexp[s]) * prob_len_at_age[s,lc,a]
   })
   
   ##Plus group for later
-  N = array(0,c(A,Y,2))
+  N = offarray(0,dimseq = list(SEXES=SEXES,POPY=POPY,AGE=A))
 
   nll = 0
   ##Random walk for recruitment
-  #for(y in 2:Y){
-  #  nll = nll - dnorm(log_rec[y],log_rec[y-1],rec_sd,TRUE)
-  #}
+  for(y in 2:length(POPY)){
+    nll = nll - dnorm(log_rec[y],log_rec[y-1],rec_sd,TRUE)
+  }
   
   ##Put in recruitment
   for(s in 1:2){
-    N[1,,s] = exp(log_rec)/2
+    N[s,,2] = exp(log_rec)/2
   }
   
-  Z = array(0,c(A,Y,2))
+  Z = 0 * N
   ##Male Mortality
-  Z[,,1] = exp(log_Z[1])
+  Z[1,,] = exp(log_Z[1])
   ##Female
-  Z[,,2] = exp(log_Z[2])
+  Z[2,,] = exp(log_Z[2])
   
-  cumsurv_m = rev(cumsum(Z[-1,1,1]))
-  cumsurv_f = rev(cumsum(Z[-1,1,2]))
+  cumsurv_m = rev(cumsum(Z[SLICE=1,SLICE=1,head(A,-1)])) 
+  cumsurv_f = rev(cumsum(Z[SLICE=2,SLICE=1,head(A,-1)]))
   total_surv = sum(cumsurv_m+cumsurv_f)
   
-  N[-1,1,1] = (cumsurv_m/total_surv)*exp(log_init_abundance)
-  N[-1,1,2] = (cumsurv_f/total_surv)*exp(log_init_abundance)
+  tmp <- (cumsurv_f/total_surv)*exp(log_init_abundance)
+  tmp <- c( N[SLICE=2,SLICE=1,SLICE=2], tmp)
+  N[2,1,] <- tmp 
   
+  tmp <- (cumsurv_m/total_surv)*exp(log_init_abundance)
+  tmp <- c( N[SLICE=1,SLICE=1,SLICE=2], tmp)
+  N[1,1,] <- tmp
   
-  for (y in 2:Y) {
-    for (a in 2:A) {
-      for (s in 1:2) {
-        N[a,y,s] <- N[a-1,y-1,s]*exp(-Z[a-1,y-1,s])
-      }
-    }
+  #N[1,1,A[-1]] <- (cumsurv_m/total_surv)*exp(log_init_abundance)
+  #N[2,1,A[-1]] <- (cumsurv_f/total_surv)*exp(log_init_abundance)
+  
+  adults <- A[-1]
+  for (y in 2:length(POPY)) {
+    ## run abundance for the next year
+    N[,y,adults] <- autoloop(s = SEXES, a = adults,{
+      N[s,y-1,a-1]*exp(-1*Z[s,y-1,a-1])
+    })
+    
+    #add the plus group
+    N[,y,max(A)] <- N[,SLICE=y,SLICE=max(A)] + N[,SLICE=y-1,SLICE=max(A)] * exp(-1*Z[,SLICE=y-1,SLICE=max(A)])
+    
   }
   
   TRO_SY <- autoloop(
-      s=SEXES, y=POPDYN_YEARS,
-      SUMOVER( a=AGES),{
-    N[a,y,s] * fec_sa(s,a)    
+      s=SEXES, y=POPY,
+      SUMOVER=list(a=A),{
+    N[s,y,a] * fec_sa[s,a]    
   })
   
   inv_TRO_SY <- 1/TRO_SY
   
   ## nll using CKMR data
-  Pr_MOP_SYLASYA <- array(0,c(2,Y,length(Lvec),A,2,Y,A))
+  #Pr_MOP_SYLASYA <- array(0,c(2,Y,length(Lvec),A,2,Y,A))
   # generating the POP probabilities
                 # This does all ages for IDEAl measurement
                 # autoloop() both CREATES the array and FILLS IT IN
                 # looping over all the "equals" at the start
                 # This does the plus-group wrong. We will fix immediately afterwards...
                 Pr_POP_SYLAB <- autoloop( 
-                    s1=SEXES, y1=SAMP_YEARS, lc1=LENGTH_CLASSES, a1=AGES,
-                    b2=POPDYN_YEARS, {
+                    s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES, a1=A,
+                    b2=POPY, {
                   #sd that parent length is currently from the mean
                   
-                  l1 <- actual_l[ lc1]
+                  l1 <- Lvec[lc1]
                   sd1 <- (l1 - la_means_SA[s1,a1])/la_sd_SA[s1,a1]
                   
                   #age of parent when off is born
                   a1_at_B2 <- a1 - (y1 - b2)
                   #length of parent when offspring is born
-                  l1_at_B2 <- la_means_SA[s1,a1_at_B2] + sd1 * la_sd_SA[s1,a1_at_B2]
                   
+                  l1_at_B2 <- la_means_SA[s1,a1_at_B2 |> clamp( A)] + 
+                      sd1 * la_sd_SA[s1,a1_at_B2 |> clamp( A)]
+                  Prob <- ifelse(l1_at_B2 > 0,
                   #!# switch fecundity input from age-based to length-based in the fecundity
-                  Prob <- 
                     (y1 >= b2) * # otherwise Molly was dead before Dolly born
                     (a1_at_B2 >= 2) *
-                    feclen_fun(s1,l1_at_B2) * inv_TRO_SB[s1,B2]
+                    make_fecundity(s1,l1_at_B2) * inv_TRO_SY[s1,b2],
+                    0)
+                  
+                  Prob
                 })
                 
                 # PLUS GROUP FIXUP HERE
                 
     num_Pr_A_SYL <- autoloop(
-      a=AGES, s=SEXES, y=SAMPY, lc=LENGTH_CLASSES,
-      prob_len_at_age[s,l,a] * N[s,y,a]
+      a=A, s=SEXES, y=SAMPY, lc=LENGTH_CLASSES,
+      prob_len_at_age[s,lc,a] * N[s,y,a]
     )              
 
-    denom_SYL <- sumover( 'a', num_Pr_A_SYL)
+    denom_SYL <- sumover(num_Pr_A_SYL,'a')
     
     Pr_a_SYL <- autoloop(
-      a=AGES, s=SEXES, y=SAMPY, lc=LENGTH_CLASSES,
-      num_Pr_a_SYL[ a, s, y, l] / denom_SYL[ s, y, l]
+      a=A, s=SEXES, y=SAMPY, lc=LENGTH_CLASSES,
+      num_Pr_A_SYL[a, s, y, lc] / denom_SYL[s, y, lc]
     )
     
     Pr_POP_SYLSYL <- autoloop(
       s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES, s2=SEXES, y2=SAMPY, lc2=LENGTH_CLASSES,
-      SUMOVER=list( a1= AGES, a2= AGES), 
+      SUMOVER=list(a1= A, a2= A), 
     {
       b2 <- y2 - a2
-      Pr_POP_SYLAB[ s1, y1, lc1, a1, b2] *
+      (b2 >= POPY[1]) *
+      Pr_POP_SYLAB[ s1, y1, lc1, a1, b2 |> clamp(POPY)] *
       Pr_a_SYL[ a1, s1, y1, lc1] *
       Pr_a_SYL[ a2, s2, y2, lc2]
     })
- 
-  ## adding likelihood based of POP composition
-  # need to encompass all parts of the Prob vector
-  # this one only has parent length, may need to add uncertain age?
-  # also need to adjust these dimensions for what the non-zero comparisons are
-  for (s1 in 1:2) {
-    for (y1 in 1:Y) {
-      for (l1 in 1:length(Lvec)) {
-        for (a1 in 1:A) {
-          for (s2 in 1:2) {
-            for (y2 in 1:Y) {
-              for (a2 in 1:A) {
-                #these arrays are a PROBLEM, will need to check for future sims and emp data.
-                #data once this version runs
-                
-                #running df version
-                #default is n_comps/n_POPs is 0
-                #check df for nonzero values
-                n_comps <- 0
-                n_POPs <- 0
-                co <- 1
-                while (co < nrow(n_POP_sylasya)) {
-                  if (n_POP_sylasya$sex.x[co] == s1 &
-                      n_POP_sylasya$SampYear.x[co] == y1 &
-                      n_POP_sylasya$lbin[co] == l1 &
-                      n_POP_sylasya$AgeAtSamp.x[co] == a1 &
-                      n_POP_sylasya$sex.y[co] == s2 &
-                      n_POP_sylasya$SampYear.y[co] == y2 &
-                      n_POP_sylasya$AgeAtSamp.y[co] == a2) {
-                    n_comps <- n_POP_sylasya$ncomp[co]
-                    n_POPs <- n_POP_sylasya$POP[co]
-                  }
-                  co <- co + 1
-                }
-                
-                ##code for array version
-                #n_comps <- n_comps_POP_sylasya[s1,y1,l1,a1,s2,y2,a2]
-                #n_POPs <- n_POP_sylasya[s1,y1,l1,a1,s2,y2,a2]
-                
-                ## add these to the likelihood
-                # number of pops and lambda is comps weighted by the probability
-                # of the pairs as calculated in the above POP prob loop
-                nll <- nll - dbinom(x = n_POPs,
-                                   size = n_comps,
-                                   prob = Pr_MOP_SYLASYA[s1,y1,l1,a1,s2,y2,a2],T)
-              }
-            }
-          }  
-        }
-      }
-    }
-  }
-  
+    
+    E_POP_SYLSYL <- n_comps_POP_SYLSYL * Pr_POP_SYLSYL 
+    
+    nll <- -sum(dpois(c(n_POP_SYLSYL),c(E_POP_SYLSYL),log = T),na.rm = T)
+    
   ##Array for average fecundity by sex and age
   #fecun = array(0,c(50,2))
   #for()
   
   REPORT(N)
   REPORT(Z)
+  REPORT(E_POP_SYLSYL)
+  REPORT(fec_sa)
   ##Return nll
   nll
-}
+})
 
 ##FOR NOW DISABLE recruitment parameters
+new_f(parm)
+
 tmbmap = list(log_rec=as.factor(rep(NA,length(parm$log_rec))))
 
 testo = MakeADFun(new_f,parm,random=c("log_rec"))
+
 testo$gr()
 repp <- testo$report()
 opt <- nlminb(testo$par, testo$fn, testo$gr)
