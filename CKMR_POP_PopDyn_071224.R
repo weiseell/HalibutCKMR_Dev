@@ -1,8 +1,8 @@
 ### Just simulated Data input pop dyn test
 # random-walk abundance
+library(tidyverse)
 library(RTMB)
 library(offarray)
-library(tidyverse)
 library(mvbutils)
 library(offartmb)
 
@@ -100,6 +100,15 @@ new_f <- function(parm) reclasso( by=parm, {
         #((Lvec[lc]/150)^bexp[s]) * prob_len_at_age[s,lc,a]
   })
   
+  fec_sa_quant <- autoloop(
+    s=SEXES, a=A, qq=(1:nquant), {
+      #calculating length for quantile at mean/sd
+      l_q <- qnorm(qq/(nquant + 1),mean = la_means_SA[s,a],sd = la_sd_SA[s,a])
+      
+      #make fecundity for length given prob
+      make_fecundity(s,l_q) * (1/nquant)
+    })
+  
   ##Plus group for later
   N = offarray(0,dimseq = list(SEXES=SEXES,POPY=POPY,AGE=A))
 
@@ -138,17 +147,17 @@ new_f <- function(parm) reclasso( by=parm, {
   ## add the plus group to year 1
   Abar_plus <- offarray(0,dimseq = list(SEXES=SEXES,POPY=POPY))
   
-  Abar_plus[,1] <- max(A) + 1/(1-exp(-1*Z[,SLICE=1,SLICE=max(A)]))
+  Abar_plus[,1] <- max(A) + 1/(1-exp(-Z[,SLICE=1,SLICE=max(A)]))
   
   adults <- A[-1]
   for (y in 2:length(POPY)) {
     ## run abundance for the next year
     N[,y,adults] <- autoloop(s = SEXES, a = adults,{
-      N[s,y-1,a-1]*exp(-1*Z[s,y-1,a-1])
+      N[s,y-1,a-1]*exp(-Z[s,y-1,a-1])
     })
     
     #add the plus group
-    N[,y,max(A)] <- N[,SLICE=y,SLICE=max(A)] + N[,SLICE=y-1,SLICE=max(A)] * exp(-1*Z[,SLICE=y-1,SLICE=max(A)])
+    N[,y,max(A)] <- N[,SLICE=y,SLICE=max(A)] + N[,SLICE=y-1,SLICE=max(A)] * exp(-Z[,SLICE=y-1,SLICE=max(A)])
     
     #add the Abar equation for the plus group
     Abar_plus[,y] <- c(((Abar_plus[,SLICE=y-1]+1) * N[,SLICE=y-1,SLICE=max(A)] + 
@@ -157,45 +166,68 @@ new_f <- function(parm) reclasso( by=parm, {
     
   }
   
+  ## calculate survival array to deal with plus group
+  # used in half-sib probability
+  maxage <- max(A) + max(POPY)
+  superAge <- 2:maxage
+  
+  ## run abundance for the next year
+  superN <- offarray(0,dimseq = list(SEXES=SEXES,POPY=POPY,AGE=superAge))
+  superN[,,A] <- N
+  
+  superN[,2:max(POPY),max(A)] <- 0
+  for (y in 2:length(POPY)) {
+    superN[,y,max(A):max(maxage)] <- superN[,y-1,(max(A):max(maxage))-1] * exp(-Z[,y-1,max(A)])
+  }
+  
+  Pr_Surv_SYAY <- autoloop(
+    spp=SEXES,y1=POPY,app=A,y2=POPY,{
+      superN[spp,y2,app + (y2-y1)]/superN[spp,y1,app]
+    }
+  )
+  
   TRO_SY <- autoloop(
       s=SEXES, y=POPY,
       SUMOVER=list(a=A),{
     N[s,y,a] * fec_sa[s,a]    
   })
   
-  inv_TRO_SY <- 1/TRO_SY
+  recip_TRO_SY <- 1/TRO_SY
   
+  ## nll using CKMR data
   ## nll using CKMR data
   #Pr_MOP_SYLASYA <- array(0,c(2,Y,length(Lvec),A,2,Y,A))
   # generating the POP probabilities
-                # This does all ages for IDEAl measurement
-                # autoloop() both CREATES the array and FILLS IT IN
-                # looping over all the "equals" at the start
-                # This does the plus-group wrong. We will fix immediately afterwards...
-                Pr_POP_SYLAB <- autoloop( 
-                    s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES, a1=A,
-                    b2=POPY, {
-                  #sd that parent length is currently from the mean
-                  
-                  l1 <- Lvec[lc1]
-                  sd1 <- (l1 - la_means_SA[s1,a1])/la_sd_SA[s1,a1]
-                  
-                  #age of parent when off is born
-                  a1_at_B2 <- a1 - (y1 - b2)
-                  #length of parent when offspring is born
-                  
-                  l1_at_B2 <- la_means_SA[s1,a1_at_B2 |> clamp( A)] + 
-                      sd1 * la_sd_SA[s1,a1_at_B2 |> clamp( A)]
-                  Prob <- ifelse(l1_at_B2 > 0,
-                  #!# switch fecundity input from age-based to length-based in the fecundity
-                    (y1 >= b2) * # otherwise Molly was dead before Dolly born
-                    (a1_at_B2 >= 2) *
-                    make_fecundity(s1,l1_at_B2) * inv_TRO_SY[s1,b2],
-                    0)
-                  
-                  Prob
-                })
-                
+  # This does all ages for IDEAl measurement
+  # autoloop() both CREATES the array and FILLS IT IN
+  # looping over all the "equals" at the start
+  # This does the plus-group wrong. We will fix immediately afterwards...
+  Pr_POP_SYLAB <- autoloop( 
+    s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES, a1=A,
+    b2=POPY, {
+      #sd that parent length is currently from the mean
+      
+      l1 <- Lvec[lc1]
+      sd1 <- (l1 - la_means_SA[s1,a1])/la_sd_SA[s1,a1]
+      
+      #age of parent when off is born
+      a1_at_B2 <- a1 - (y1 - b2)
+      #length of parent when offspring is born
+      
+      l1_at_B2 <- la_means_SA[s1,a1_at_B2 |> clamp( A)] + 
+        sd1 * la_sd_SA[s1,a1_at_B2 |> clamp( A)]
+      l1_at_B2 <- ifelse( l1_at_B2<0, 0, l1_at_B2) # avoid min, max, etc; diffable (?)
+      # ... preferable to do ifelse() *before* make_fecundity(), so we avoid neg nums to pwr...
+      
+      #!# switch fecundity input from age-based to length-based in the fecundity
+      Prob <- 
+        (y1 >= b2) * # otherwise Molly was dead before Dolly born
+        (a1_at_B2 >= 2) *
+        make_fecundity(s1,l1_at_B2) * recip_TRO_SY[s1,b2]
+      
+      Prob
+    })
+  
                 # PLUS GROUP FIXUP HERE
                 # adjusting probabilities to account for plus group
                 # age of parent is 30+ instead of only 30
@@ -232,18 +264,29 @@ new_f <- function(parm) reclasso( by=parm, {
                 #})
                 
     #Pr_POP_SYLAB[,,,,max(A)] <- Pr_POP_SYLAB_plus
-                
+                            
     num_Pr_A_SYL <- autoloop(
       a=A, s=SEXES, y=SAMPY, lc=LENGTH_CLASSES,
       prob_len_at_age[s,lc,a] * N[s,y,a]
     )              
 
-    denom_SYL <- sumover(num_Pr_A_SYL,'a')
-    
-    Pr_a_SYL <- autoloop(
-      a=A, s=SEXES, y=SAMPY, lc=LENGTH_CLASSES,
-      num_Pr_A_SYL[a, s, y, lc] / denom_SYL[s, y, lc]
+    #denom_SYL <- sumover(num_Pr_A_SYL,'a')
+    recip_denom_SYL <- 1 / autoloop( 
+      indices=dimseq( num_Pr_A_SYL)[-1],   # see num_Pr_A_SYL above for actual list
+      SUMOVER=dimseq( num_Pr_A_SYL)[1],    # just the "a"
+      num_Pr_A_SYL[a, s, y, lc]
     )
+    
+    Pr_A_SYL <- autoloop(
+      a=A, s=SEXES, y=SAMPY, lc=LENGTH_CLASSES,
+      num_Pr_A_SYL[a, s, y, lc] * recip_denom_SYL[s, y, lc]
+    )
+    
+    
+    Pr_POP_SYLB <- autoloop(s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES,b2=POPY,
+                            SUMOVER = list(a1 = A), {
+                              Pr_POP_SYLAB[s1,y1,lc1,a1,b2] * Pr_A_SYL[a1,s1,y1,lc1]
+                            })  
     
     Pr_POP_SYLSYL <- autoloop(
       s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES, s2=SEXES, y2=SAMPY, lc2=LENGTH_CLASSES,
@@ -252,8 +295,8 @@ new_f <- function(parm) reclasso( by=parm, {
       b2 <- y2 - a2
       (b2 >= POPY[1]) *
       Pr_POP_SYLAB[ s1, y1, lc1, a1, b2 |> clamp(POPY)] *
-      Pr_a_SYL[ a1, s1, y1, lc1] *
-      Pr_a_SYL[ a2, s2, y2, lc2]
+      Pr_A_SYL[ a1, s1, y1, lc1] *
+      Pr_A_SYL[ a2, s2, y2, lc2]
     })
     
     E_POP_SYLSYL <- n_comps_POP_SYLSYL * Pr_POP_SYLSYL 
@@ -264,10 +307,7 @@ new_f <- function(parm) reclasso( by=parm, {
   #fecun = array(0,c(50,2))
   #for()
   
-  REPORT(N)
-  REPORT(Z)
-  REPORT(E_POP_SYLSYL)
-  REPORT(fec_sa)
+  REPORTO( N, Z, E_POP_SYLSYL, fec_sa)
   ##Return nll
   nll
 })
@@ -277,7 +317,7 @@ new_f(parm)
 
 tmbmap = list(log_rec=as.factor(rep(NA,length(parm$log_rec))))
 
-testo = MakeADFun(new_f,parm,random=c("log_rec"))
+testo = MakeADFun(new_f,parm,random=c("log_rec"),map = tmbmap)
 
 testo$gr()
 repp <- testo$report()

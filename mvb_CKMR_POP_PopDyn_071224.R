@@ -242,7 +242,7 @@ print( class( N))
   nll
 })
 
-mvb_new_f ion(parm) reclasso( by=parm, {
+mvb_new_f <- function(parm) reclasso( by=parm, {
   getAll(dat,parm)
 
 print( get( '[<-')) # debug
