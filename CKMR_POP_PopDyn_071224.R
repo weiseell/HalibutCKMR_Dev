@@ -23,6 +23,7 @@ dat$SAMPY <- 10:15
 dat$Lvec <- seq(10,220,10)
 dat$LENGTH_CLASSES <- 1:length(dat$Lvec)
 dat$SEXES <- 1:2
+dat$numq <- 5
 dat$la_key <- read.table("Inputs/LA_MeanSD.txt",header = T, sep = "\t",stringsAsFactors = F)
 
 #number of POPs and comps as array (from script 2 that processes sim results)
@@ -83,7 +84,7 @@ new_f <- function(parm) reclasso( by=parm, {
   rec_sd = exp(log_rec_sd)
   ##An array for male/female fecundity
   bexp <- exp(log_bexp)
-  
+  rec <- exp(log_rec)
   ##Array for average fecundity by sex and age
   ## create prob_by_length array and then fecun array
   
@@ -110,7 +111,7 @@ new_f <- function(parm) reclasso( by=parm, {
   
   ##Put in recruitment
   for(s in 1:2){
-    N[s,,2] = exp(log_rec)/2
+    N[s,,2] = rec/2
   }
   
   Z = 0 * N
@@ -134,6 +135,11 @@ new_f <- function(parm) reclasso( by=parm, {
   #N[1,1,A[-1]] <- (cumsurv_m/total_surv)*exp(log_init_abundance)
   #N[2,1,A[-1]] <- (cumsurv_f/total_surv)*exp(log_init_abundance)
   
+  ## add the plus group to year 1
+  Abar_plus <- offarray(0,dimseq = list(SEXES=SEXES,POPY=POPY))
+  
+  Abar_plus[,1] <- max(A) + 1/(1-exp(-1*Z[,SLICE=1,SLICE=max(A)]))
+  
   adults <- A[-1]
   for (y in 2:length(POPY)) {
     ## run abundance for the next year
@@ -143,6 +149,11 @@ new_f <- function(parm) reclasso( by=parm, {
     
     #add the plus group
     N[,y,max(A)] <- N[,SLICE=y,SLICE=max(A)] + N[,SLICE=y-1,SLICE=max(A)] * exp(-1*Z[,SLICE=y-1,SLICE=max(A)])
+    
+    #add the Abar equation for the plus group
+    Abar_plus[,y] <- c(((Abar_plus[,SLICE=y-1]+1) * N[,SLICE=y-1,SLICE=max(A)] + 
+                          max(A) * N[,SLICE=y-1,SLICE=max(A)-1])/
+      (N[,SLICE=y-1,SLICE=max(A)] + N[,SLICE=y-1,SLICE=max(A)-1]))
     
   }
   
@@ -186,6 +197,41 @@ new_f <- function(parm) reclasso( by=parm, {
                 })
                 
                 # PLUS GROUP FIXUP HERE
+                # adjusting probabilities to account for plus group
+                # age of parent is 30+ instead of only 30
+                
+                #Pr_POP_SYLAB_plus <- autoloop(s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES,
+                #                              b2=POPY, SUMOVER=list(q=1:numq), {
+                                                #sd that parent length is currently from the mean
+                  
+                  
+                  
+                  # calculate what a1 is based on the length
+                  #a1 <- qexp(q/(numq + 1)) * (Abar_plus[s1,y1] - max(A)) + max(A)
+                  
+                  #l1 <- Lvec[lc1]
+                  #!# CAN FIX THIS IN THE FUTURE BY CHANGING THE MEANS/SD FOR LENGTH/AGE
+                  # TO A FUNCTION BASED ON LA DATA
+                  
+                  #sd1 <- (l1 - la_means_SA[s1,a1])/la_sd_SA[s1,a1]
+                  
+                  #age of parent when off is born
+                  #a1_at_B2 <- a1 - (y1 - b2)
+                  #length of parent when offspring is born
+                  
+                  #l1_at_B2 <- la_means_SA[s1,a1_at_B2 |> clamp( A)] + 
+                  #    sd1 * la_sd_SA[s1,a1_at_B2 |> clamp( A)]
+                  #Prob <- ifelse(l1_at_B2 > 0,
+                  #!# switch fecundity input from age-based to length-based in the fecundity
+                  #  (y1 >= b2) * # otherwise Molly was dead before Dolly born
+                  #  (a1_at_B2 >= 2) *
+                  #  make_fecundity(s1,l1_at_B2) * inv_TRO_SY[s1,b2],
+                  #  0)
+                  
+                  #Prob
+                #})
+                
+    #Pr_POP_SYLAB[,,,,max(A)] <- Pr_POP_SYLAB_plus
                 
     num_Pr_A_SYL <- autoloop(
       a=A, s=SEXES, y=SAMPY, lc=LENGTH_CLASSES,
