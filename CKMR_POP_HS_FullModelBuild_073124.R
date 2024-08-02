@@ -72,16 +72,23 @@ dat$prob_len_at_age <- offarray(raw_prob_len_at_age,
                                 dimseq=list( s=dat$SEXES, lc=dat$LENGTH_CLASSES, a=dat$A))
 
 ### Fecundity function fix
-## RTMB hates my fecundity function (boo), so we need
-## to define the function and its derivative for RTMB so it will load
-
+#defining shape and scale parameters for pgamma in the
+#fecundity things
+dat <- within( dat, {
+  la_shape_SA <- (la_means_SA/la_sd_SA)^2
+  la_scale_SA <- la_means_SA/la_shape_SA
+})
 
 ## create parameter list
 parm <- list()
 #log recruitment - random effect length popdynyears
-parm$log_rec <- log(Narray[1,,1] + Narray[1,,2])
-parm$log_rec_sd = log(0.3)
+parm$rw_log_rec <- Narray[1,,1] * 0
+parm$rw_log_rec_sd = log(0.3)
+parm$noise_logrec_dev <- Narray[1,,1] * 0
+parm$noise_rec_dev_sd_log = log(0.3)
 #parm$log_rec <- rep_len(x = 0.1, length.out = dat$Y)
+
+parm$log_rec <- c(10,10)
 #total log abundance - split into Y/A abundance within the model
 #parm$log_init_abundance <- 0.1
 parm$log_init_abundance <- log(sum(Narray[-1,1,]))
@@ -96,16 +103,18 @@ new_f <- function(parm) reclasso( by=parm, {
   getAll(dat,parm)
   
   #exp the sd
-  rec_sd = exp(log_rec_sd)
+  rw_rec_sd = exp(rw_log_rec_sd)
+  
   ##An array for male/female fecundity
   bexp <- exp(log_bexp)
   rec <- exp(log_rec)
+  noise_rec_dev_sd <- exp(noise_rec_dev_sd_log)
   lucky_litter_par <- exp(log_lucky_litter_par)
   ##Array for average fecundity by sex and age
   make_fecundity <- function(s,len){
-    # (len/150)^bexp[s]
+    (len/150)^bexp[s]
     # ((len/150) * (len/150)) ^ (bexp[s]/2) # thought this might work for now, but apparently not
-    ((len/150)+1)^bexp[]
+    # ((len/150)+1)^bexp[s]
   }
   ## create prob_by_length array and then fecun array
   
@@ -124,7 +133,10 @@ new_f <- function(parm) reclasso( by=parm, {
   fec_sa_quant <- autoloop(
     s=SEXES, a=A, qq=(1:nquant), {
       #calculating length for quantile at mean/sd
-      l_q <- qnorm(qq/(nquant + 1),mean = la_means_SA[s,a],sd = la_sd_SA[s,a])
+      #l_q <- qnorm(qq/(nquant + 1),mean = la_means_SA[s,a],sd = la_sd_SA[s,a])
+      l_q <- qgamma(qq/(nquant + 1),
+                    shape = la_shape_SA[s,a],
+                    scale = la_scale_SA[s,a])
       
       #make fecundity for length given prob
       make_fecundity(s,l_q) * (1/nquant)
@@ -135,13 +147,22 @@ new_f <- function(parm) reclasso( by=parm, {
   
   nll = 0
   ##Random walk for recruitment
-  for(y in 2:length(POPY)){
-    nll = nll - dnorm(log_rec[y],log_rec[y-1],rec_sd,TRUE)
-  }
+  #for(y in 2:length(POPY)){
+  #  nll = nll - dnorm(log_rec[y],log_rec[y-1],rec_sd,TRUE)
+  #}
+  
+  nll <- sum(dnorm(diff(rw_log_rec), mean=0, sd=rw_rec_sd))
+  
+  nll <- sum(dnorm(noise_logrec_dev, mean=0, sd=noise_rec_dev_sd))
+
+  cumul_rw_logrec <- cumsum(rw_log_rec)
+
+  #per year change in recruitment
+  rec_mul <- exp(cumul_rw_logrec + noise_logrec_dev) 
   
   ##Put in recruitment
   for(s in 1:2){
-    N[s,,2] = rec/2
+    N[s,,2] = rec[s] * rec_mul
   }
   
   Z = 0 * N
@@ -234,15 +255,20 @@ new_f <- function(parm) reclasso( by=parm, {
     b2=POPY, {
       #sd that parent length is currently from the mean
       l1 <- Lvec[lc1]
-      sd1 <- (l1 - la_means_SA[s1,a1])/la_sd_SA[s1,a1]
-      
+      #sd1 <- (l1 - la_means_SA[s1,a1])/la_sd_SA[s1,a1]
+      qq1 <- pgamma(l1,shape = la_shape_SA[s1,a1],scale = la_scale_SA[s1,a1])
       #age of parent when off is born
       a1_at_B2 <- a1 - (y1 - b2)
-      #length of parent when offspring is born
       
-      l1_at_B2 <- la_means_SA[s1,a1_at_B2 |> clamp( A)] + 
-        sd1 * la_sd_SA[s1,a1_at_B2 |> clamp( A)]
-      l1_at_B2 <- ifelse( l1_at_B2<0, 0, l1_at_B2) # avoid min, max, etc; diffable (?)
+      #length of parent when offspring is born
+      l1_at_B2 <- qgamma(qq1,shape = la_shape_SA[s1,a1_at_B2 |> clamp(A)],
+                         scale = la_scale_SA[s1,a1_at_B2 |> clamp(A)])
+      
+      
+      
+      #l1_at_B2 <- la_means_SA[s1,a1_at_B2 |> clamp( A)] + 
+      #  sd1 * la_sd_SA[s1,a1_at_B2 |> clamp( A)]
+      #l1_at_B2 <- ifelse( l1_at_B2<0, 0, l1_at_B2) # avoid min, max, etc; diffable (?)
       # ... preferable to do ifelse() *before* make_fecundity(), so we avoid neg nums to pwr...
       
       #!# switch fecundity input from age-based to length-based in the fecundity
@@ -258,38 +284,38 @@ new_f <- function(parm) reclasso( by=parm, {
   # adjusting probabilities to account for plus group
   # age of parent is 30+ instead of only 30
   
-  #Pr_POP_SYLAB_plus <- autoloop(s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES,
-  #                              b2=POPY, SUMOVER=list(q=1:numq), {
-  #sd that parent length is currently from the mean
-  
-  
-  
+  Pr_POP_SYLAB_plus <- autoloop(s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES,
+                                b2=POPY, SUMOVER=list(q=1:numq), {
+  ##sd that parent length is currently from the mean
   # calculate what a1 is based on the length
-  #a1 <- qexp(q/(numq + 1)) * (Abar_plus[s1,y1] - max(A)) + max(A)
+  a1 <- qexp(q/(numq + 1)) * (Abar_plus[s1,y1] - max(A)) + max(A)
   
-  #l1 <- Lvec[lc1]
+  l1 <- Lvec[lc1]
   #!# CAN FIX THIS IN THE FUTURE BY CHANGING THE MEANS/SD FOR LENGTH/AGE
   # TO A FUNCTION BASED ON LA DATA
+  qqplus <- pgamma(l1,shape = la_shape_SA_fun(s1,a1),scale = la_scale_SA_fun(s1,a1))
   
-  #sd1 <- (l1 - la_means_SA[s1,a1])/la_sd_SA[s1,a1]
+  sd1 <- (l1 - la_means_SA[s1,a1])/la_sd_SA[s1,a1]
   
   #age of parent when off is born
-  #a1_at_B2 <- a1 - (y1 - b2)
+  a1_at_B2 <- a1 - (y1 - b2)
+  
   #length of parent when offspring is born
+  l1_at_B2 <- qgamma(qq1,shape = la_shape_SA_fun(s1,a1_at_B2),
+                     scale = la_scale_SA_fun(s1,a1_at_B2))
   
   #l1_at_B2 <- la_means_SA[s1,a1_at_B2 |> clamp( A)] + 
   #    sd1 * la_sd_SA[s1,a1_at_B2 |> clamp( A)]
-  #Prob <- ifelse(l1_at_B2 > 0,
+
   #!# switch fecundity input from age-based to length-based in the fecundity
-  #  (y1 >= b2) * # otherwise Molly was dead before Dolly born
-  #  (a1_at_B2 >= 2) *
-  #  make_fecundity(s1,l1_at_B2) * inv_TRO_SY[s1,b2],
-  #  0)
+  Prob <- (y1 >= b2) * # otherwise Molly was dead before Dolly born
+    (a1_at_B2 >= 2) *
+    make_fecundity(s1,l1_at_B2) * inv_TRO_SY[s1,b2]
   
-  #Prob
-  #})
+  Prob
+  })
   
-  #Pr_POP_SYLAB[,,,,max(A)] <- Pr_POP_SYLAB_plus
+  Pr_POP_SYLAB[,,,,max(A)] <- Pr_POP_SYLAB_plus
   
   num_Pr_A_SYL <- autoloop(
     a=A, s=SEXES, y=SAMPY, lc=LENGTH_CLASSES,
