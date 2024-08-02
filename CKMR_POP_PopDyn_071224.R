@@ -306,6 +306,32 @@ new_f <- function(parm) reclasso( by=parm, {
   ##Array for average fecundity by sex and age
   #fecun = array(0,c(50,2))
   #for()
+    #!#!#!# add this to the big model once we make the age data
+    ## Post-hoc Age addition for POPs and TKPs
+    for (j in 1:nrow(POPage)) {
+      # call SYLSYL group and age for both pairs
+      age_s1 <- agePairs$s1[i]
+      age_y1 <- agePairs$y1[i]
+      age_l1 <- agePairs$l1[i]
+      age_s2 <- agePairs$s2[i]
+      age_y2 <- agePairs$y2[i]
+      age_l2 <- agePairs$l2[i]
+      
+      age_a1 <- agePairs$a1[i]
+      age_a2 <- agePairs$a2[i]
+      
+      ## grabbing SYL probs for both ages
+      Pr_A_SYL_age1 <- Pr_A_SYL[age_a1,age_s1,age_y1,age_l1]
+      Pr_A_SYL_age2 <- Pr_A_SYL[age_a2,age_s2,age_y2,age_l2]
+      
+      # pr for both ages
+      Pr_SYL_a1a2 <- Pr_A_SYL_age1 * Pr_A_SYL_age2
+      ## grabbing relevant SYLSYL prob
+      Pr_POP_SYLSYL_tmp <- Pr_POP_SYLSYL1[age_s1,age_y1,age_l1,age_s2,age_y2,age_l2]
+      
+      age_b2 <- age_y2 - age_a2
+      nll <- nll - (Pr_POP_SYLAB[age_s1, age_y1, age_l1, age_a1, age_b2] * Pr_SYL_a1a2)/Pr_POP_SYLSYL_tmp
+    }
   
   REPORTO( N, Z, E_POP_SYLSYL, fec_sa)
   ##Return nll
