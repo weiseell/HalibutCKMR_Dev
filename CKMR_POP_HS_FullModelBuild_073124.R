@@ -99,6 +99,9 @@ parm$log_Z <- log(c(0.2,0.2))
 parm$log_bexp <- c(0,0)
 parm$log_lucky_litter_par <- 0
 
+parm$logslopea0 <- log(0.2)
+parm$ppn_female <- 0.5
+
 new_f <- function(parm) reclasso( by=parm, {
   getAll(dat,parm)
   
@@ -171,10 +174,26 @@ new_f <- function(parm) reclasso( by=parm, {
   ##Female
   Z[2,,] = exp(log_Z[2])
   
+  ## calculating the first year for all ages
+  Ny0 <- offarray(0, dimseq = list(AGE=A))
+  Ny0[min(A)] <- 1
+  
+  slopea0 <- exp(-logslopea0) # parameter for this geometric function
+  for (a in (min(A)+1):max(A)) {
+    Ny0[a] <- Ny0[a-1] * slopea0
+  }
+  
+  Ny0[max(A)] <- Ny0[max(A)]/(1-slopea0)
+  
+  Ny0 <- Ny0 * exp(log_init_abundance)
+  
+  N[female,min(POPY),] <- Ny0 * ppn_female
+  N[male,min(POPY),] <- Ny0 * (1-ppn_female)
+  
   #calculating sex-separated survival
-  cumsurv_m = rev(cumsum(Z[SLICE=1,SLICE=1,head(A,-1)])) 
-  cumsurv_f = rev(cumsum(Z[SLICE=2,SLICE=1,head(A,-1)]))
-  total_surv = sum(cumsurv_m+cumsurv_f)
+  #cumsurv_m = rev(cumsum(Z[SLICE=1,SLICE=1,head(A,-1)])) 
+  #cumsurv_f = rev(cumsum(Z[SLICE=2,SLICE=1,head(A,-1)]))
+  #total_surv = sum(cumsurv_m+cumsurv_f)
   
   ##rough off-array fix for initial abundance
   #tmp <- (cumsurv_f/total_surv)*exp(log_init_abundance)
@@ -186,8 +205,8 @@ new_f <- function(parm) reclasso( by=parm, {
   #N[1,1,] <- tmp
   
   #nice adding of initial abundance
-  N[1,1,A[-1]] <- (cumsurv_m/total_surv)*exp(log_init_abundance)
-  N[2,1,A[-1]] <- (cumsurv_f/total_surv)*exp(log_init_abundance)
+  #N[1,1,A[-1]] <- (cumsurv_m/total_surv)*exp(log_init_abundance)
+  #N[2,1,A[-1]] <- (cumsurv_f/total_surv)*exp(log_init_abundance)
   
   ## add the plus group to year 1
   Abar_plus <- offarray(0,dimseq = list(SEXES=SEXES,POPY=POPY))
