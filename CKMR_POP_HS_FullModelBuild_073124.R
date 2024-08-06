@@ -304,10 +304,10 @@ new_f <- function(parm) reclasso( by=parm, {
   # age of parent is 30+ instead of only 30
   
   Pr_POP_SYLAB_plus <- autoloop(s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES,
-                                b2=POPY, SUMOVER=list(q=1:numq), {
+                                b2=POPY, SUMOVER=list(q=1:nquant), {
   ##sd that parent length is currently from the mean
   # calculate what a1 is based on the length
-  a1 <- qexp(q/(numq + 1)) * (Abar_plus[s1,y1] - max(A)) + max(A)
+  a1 <- qexp(q/(nquant + 1)) * (Abar_plus[s1,y1] - max(A)) + max(A)
   
   l1 <- Lvec[lc1]
   #!# CAN FIX THIS IN THE FUTURE BY CHANGING THE MEANS/SD FOR LENGTH/AGE
