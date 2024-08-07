@@ -14,6 +14,7 @@ load("Inputs/NHSs_SYLSYL_071724.rda")
 load("Inputs/haps_HSs_Sim_080124.rda")
 #source functions for RTMB model
 source("ModelFunction/prob_la.R")
+source("ModelFunction/growthFunGen.R")
 
 Narray = array(CS_181_195$abundance,c(50,15,2))
 dat <- list()
@@ -46,17 +47,17 @@ dat$HapFreq <- HapFreq
 #split la_key into arrays of means and sds
 raw_la_means_SA <- dat$la_key %>% 
   arrange(sex,AgeClass) %>% 
-  select(sex,AgeClass,mean) %>% 
+  dplyr::select(sex,AgeClass,mean) %>% 
   filter(AgeClass <= 30) %>% 
   spread(AgeClass,mean) %>% 
-  select(-sex)
+  dplyr::select(-sex)
 
 raw_la_sd_SA <- dat$la_key %>% 
   arrange(sex,AgeClass) %>% 
-  select(sex,AgeClass,sd) %>% 
+  dplyr::select(sex,AgeClass,sd) %>% 
   filter(AgeClass <= 30) %>% 
   spread(AgeClass,sd) %>% 
-  select(-sex)
+  dplyr::select(-sex)
 
 dat$la_means_SA <- offarray(as.matrix(raw_la_means_SA),dimseq=list( s=dat$SEXES, a=dat$A))
 dat$la_sd_SA <- offarray(as.matrix(raw_la_sd_SA),dimseq=list( s=dat$SEXES, a=dat$A))
@@ -113,12 +114,15 @@ new_f <- function(parm) reclasso( by=parm, {
   rec <- exp(log_rec)
   noise_rec_dev_sd <- exp(noise_rec_dev_sd_log)
   lucky_litter_par <- exp(log_lucky_litter_par)
+  slopea0 <- exp(logslopea0)
+  
   ##Array for average fecundity by sex and age
   make_fecundity <- function(s,len){
     (len/150)^bexp[s]
     # ((len/150) * (len/150)) ^ (bexp[s]/2) # thought this might work for now, but apparently not
     # ((len/150)+1)^bexp[s]
   }
+  
   ## create prob_by_length array and then fecun array
   
   #prob_len_at_age <- autoloop(
@@ -178,7 +182,6 @@ new_f <- function(parm) reclasso( by=parm, {
   Ny0 <- offarray(0, dimseq = list(AGE=A))
   Ny0[min(A)] <- 1
   
-  slopea0 <- exp(-logslopea0) # parameter for this geometric function
   for (a in (min(A)+1):max(A)) {
     Ny0[a] <- Ny0[a-1] * slopea0
   }
@@ -246,7 +249,7 @@ new_f <- function(parm) reclasso( by=parm, {
       c(exp(-Z[,SLICE=(y-1),SLICE=max(A)]))
   }
   
-  ## needs to be checked to after superN is debugged
+  ## calculate survival past 30 with superN
   Pr_Surv_SYAY <- autoloop(
     spp=SEXES,y1=POPY,app=superAge,y2=POPY,{
       superN[spp,y2,(app + (y2-y1)) |> clamp(superAge)]/superN[spp,y1,app]
@@ -260,7 +263,7 @@ new_f <- function(parm) reclasso( by=parm, {
       N[s,y,a] * fec_sa[s,a]    
     })
   
-  #making the reciporical because RTMB hates dividing stuff
+  #making the reciprocal because RTMB hates dividing stuff
   recip_TRO_SY <- 1/TRO_SY
   
   ## POP nll using CKMR data ###
@@ -299,42 +302,42 @@ new_f <- function(parm) reclasso( by=parm, {
       Prob
     })
   
+  
   # PLUS GROUP FIXUP HERE
   # adjusting probabilities to account for plus group
   # age of parent is 30+ instead of only 30
   
   Pr_POP_SYLAB_plus <- autoloop(s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES,
                                 b2=POPY, SUMOVER=list(q=1:nquant), {
-  ##sd that parent length is currently from the mean
-  # calculate what a1 is based on the length
-  a1 <- qexp(q/(nquant + 1)) * (Abar_plus[s1,y1] - max(A)) + max(A)
+    ##sd that parent length is currently from the mean
+    # calculate what a1 is based on the length
+    a1 <- qexp(q/(nquant + 1)) * (Abar_plus[s1,y1] - max(A)) + max(A)
   
-  l1 <- Lvec[lc1]
-  #!# CAN FIX THIS IN THE FUTURE BY CHANGING THE MEANS/SD FOR LENGTH/AGE
-  # TO A FUNCTION BASED ON LA DATA
-  qqplus <- pgamma(l1,shape = la_shape_SA_fun(s1,a1),scale = la_scale_SA_fun(s1,a1))
+    l1 <- Lvec[lc1]
+    #!# CAN FIX THIS IN THE FUTURE BY CHANGING THE MEANS/SD FOR LENGTH/AGE
+    # TO A FUNCTION BASED ON LA DATA
+    sd1 <- (l1 - len_at_age1(a1))/sd_at_len1(a1)
   
-  sd1 <- (l1 - la_means_SA[s1,a1])/la_sd_SA[s1,a1]
+    #age of parent when off is born
+    a1_at_B2 <- a1 - (y1 - b2)
   
-  #age of parent when off is born
-  a1_at_B2 <- a1 - (y1 - b2)
+    #length of parent when offspring is born
+    #l1_at_B2 <- qgamma(qq1,shape = la_shape_SA_fun(s1,a1_at_B2),
+    #                   scale = la_scale_SA_fun(s1,a1_at_B2))
   
-  #length of parent when offspring is born
-  l1_at_B2 <- qgamma(qq1,shape = la_shape_SA_fun(s1,a1_at_B2),
-                     scale = la_scale_SA_fun(s1,a1_at_B2))
-  
-  #l1_at_B2 <- la_means_SA[s1,a1_at_B2 |> clamp( A)] + 
-  #    sd1 * la_sd_SA[s1,a1_at_B2 |> clamp( A)]
+    l1_at_B2 <- len_at_age1(a1_at_B2) + 
+        sd1 * sd_at_len1(a1_at_B2)
 
-  #!# switch fecundity input from age-based to length-based in the fecundity
-  Prob <- (y1 >= b2) * # otherwise Molly was dead before Dolly born
-    (a1_at_B2 >= 2) *
-    make_fecundity(s1,l1_at_B2) * inv_TRO_SY[s1,b2]
+    #!# switch fecundity input from age-based to length-based in the fecundity
+    Prob <- (y1 >= b2) * # otherwise Molly was dead before Dolly born
+      (a1_at_B2 >= 2) * 
+      (l1_at_B2 > 0) * # otherwise length shows that Molly wouldn't have been born yet
+      make_fecundity(s1,l1_at_B2) * recip_TRO_SY[s1,b2]
   
-  Prob
+    Prob
   })
   
-  Pr_POP_SYLAB[,,,,max(A)] <- Pr_POP_SYLAB_plus
+  Pr_POP_SYLAB[,,,max(A),] <- Pr_POP_SYLAB[,,,SLICE=max(A),] + Pr_POP_SYLAB_plus
   
   num_Pr_A_SYL <- autoloop(
     a=A, s=SEXES, y=SAMPY, lc=LENGTH_CLASSES,
@@ -605,7 +608,7 @@ tmpout <- new_f(parm)
 
 tmbmap = list(log_rec=as.factor(rep(NA,length(parm$log_rec))))
 
-testo = MakeADFun(new_f,parm,random=c("log_rec"),map = tmbmap)
+testo = MakeADFun(new_f,parm,random=c("log_rec"))
 
 testo$gr()
 
