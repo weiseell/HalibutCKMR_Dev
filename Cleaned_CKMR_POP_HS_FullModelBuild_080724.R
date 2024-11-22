@@ -275,7 +275,7 @@ new_f <- function(parm) reclasso( by=parm, {
                          scale = la_scale_SA[s1,a1_at_B2 |> clamp(A)])
       
       # generate probability given fecundity of par
-      # and TRO at the offspring brith year
+      # and TRO at the offspring birth year
       Prob <- (y1 >= b2) * # otherwise Molly was dead before Dolly born
         (a1_at_B2 >= 2) *
         make_fecundity(s1,l1_at_B2) * recip_TRO_SY[s1,b2]

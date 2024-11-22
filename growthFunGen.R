@@ -1,7 +1,7 @@
 library(scam)
 library(tidyverse)
 
-lamean = read.table("./Inputs/LA_MeanSD.txt",header=TRUE)
+lamean = read.table("RTMB_Input/LA_MeanSD.txt",header=TRUE)
 
 lamean$sex = as.factor(lamean$sex)
 
@@ -33,11 +33,11 @@ ggplot(lamean,aes(x=mean,y=CV)) + geom_point(aes(size=sqrt(num),color=sex)) + ge
 
 pdat1 = expand.grid(AgeClass=seq(0,50,by=0.01),sex=1)
 pdat1$pred =  predict(growth_model,newdata=pdat1)
-pdat1$epred = pdat$pred
+pdat1$epred = pdat1$pred
 
 pdat2 = expand.grid(AgeClass=seq(0,50,by=0.01),sex=2)
 pdat2$pred =  predict(growth_model,newdata=pdat2)
-pdat2$epred = pdat$pred
+pdat2$epred = pdat2$pred
 
 
 len_at_age1 = RTMB::splinefun(x=pdat1$AgeClass,y=pdat1$pred)
