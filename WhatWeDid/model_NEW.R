@@ -8,15 +8,16 @@ library(offartmb)
 
 #load simulated data inputs
 load("Inputs/CensusSize_Sim_071224.rda")
-load("Inputs/haps_HSs_Sim_072525.rda")
+load("Inputs/Ncomp_POPs_SYLSYL_070924.rda")
+load("Inputs/NPOPs_SYLSYL_070924.rda")
+load("Inputs/NHSs_SYLSYL_071724.rda")
+load("Inputs/haps_HSs_Sim_080124.rda")
 #source functions for RTMB model
 source("ModelFunction/prob_la.R")
 source("ModelFunction/growthFunGen.R")
 
-##read in the sim check
-simCheck =  readRDS("simCheck.rds")
+POP_counts = read.csv("./Inputs/POPs_ncomp_df_072325.csv")
 
-rel_counts = read.csv("./Inputs/Relate_ncomp_df_072525.csv")
 
 ####
 ## dat inputs for the model
@@ -43,8 +44,8 @@ dat$sdpredr22 <- sdpredr2
 
 
 #number of POPs and comps as array (from script 2 that processes sim results)
-#dat$N_TKP_SYLSYL <- N_TKP_SYLSYL
-dat$TKPairs <- TKPairs
+dat$N_TKP_SYLSYL <- N_TKP_SYLSYL
+##dat$TKPairs <- TKPairs
 
 
 ###CREATE POP/HSP offarrays
@@ -55,9 +56,8 @@ n_comps_POP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=da
 N_TKP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$LENGTH_CLASSES,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$LENGTH_CLASSES))
 
 ##FOR LATER??????
-#N_comps_TKP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$LENGTH_CLASSES,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$LENGTH_CLASSES))
+N_comps_TKP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$LENGTH_CLASSES,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$LENGTH_CLASSES))
 
-# function to load data into offarrays
 fill_offcrud <- function(count_df,count_array,target_col="POP"){
     count_df = count_df[count_df[,target_col] != 0,]
     for(i in 1:nrow(count_df)){
@@ -66,10 +66,11 @@ fill_offcrud <- function(count_df,count_array,target_col="POP"){
     count_array
 }
 
-#add offarrays to data input
-dat$n_POP_SYLSYL = fill_offcrud(rel_counts,n_POP_SYLSYL,"POP")
-dat$n_comps_POP_SYLSYL = fill_offcrud(rel_counts,n_comps_POP_SYLSYL,"ncomp")
-dat$N_TKP_SYLSYL = fill_offcrud(rel_counts,N_TKP_SYLSYL,"SOPs")
+dat$n_POP_SYLSYL = fill_offcrud(POP_counts,n_POP_SYLSYL,"POP")
+dat$n_comps_POP_SYLSYL = fill_offcrud(POP_counts,n_comps_POP_SYLSYL,"ncomp")
+
+###
+
 
 
 ## SIMULATED HAPLOTYPE FREQS
@@ -77,7 +78,7 @@ dat$N_TKP_SYLSYL = fill_offcrud(rel_counts,N_TKP_SYLSYL,"SOPs")
 nHap <- 7
 HapFreq <- 1:nHap
 HapFreq <- HapFreq/sum(HapFreq)
-dat$HapFreq <- HapFreq
+#dat$HapFreq <- HapFreq
 
 #split la_key into arrays of means and sds
 raw_la_means_SA <- dat$la_key %>% 
@@ -110,9 +111,9 @@ dat$prob_len_at_age <- offarray(raw_prob_len_at_age,
 ### Fecundity function fix
 #defining shape and scale parameters for pgamma in the
 #fecundity functions
-dat <- within(dat, {
+dat <- within( dat, {
   la_shape_SA <- (la_means_SA/la_sd_SA)^2
-  la_scale_SA <- la_sd_SA^2/la_means_SA
+  la_scale_SA <- la_means_SA/la_shape_SA
 })
 
 ####
@@ -125,7 +126,7 @@ parm$rw_log_rec_sd = log(0.3)
 parm$noise_logrec_dev <- Narray[1,,1] * 0
 parm$noise_rec_dev_sd_log = log(0.3)
 
-parm$log_rec <- c(log(10000),log(10000))
+##parm$log_rec <- c(10,10)
 #total log abundance - split into Y/A abundance within the model
 #currently have the summed abundance of year 181 in the simulation
 parm$log_init_abundance <- log(74884)
@@ -137,7 +138,7 @@ parm$log_Z <- log(c(0.18,0.18))
 parm$log_bexp <- log(c(3.624,3.624))
 
 #no lucky litter analog in the simulation
-parm$log_lucky_litter_par <- 2
+parm$log_lucky_litter_par <- 0
 
 #geometric slope of recruitment
 ##parm$logslopea0 <- log(0.2)
@@ -147,8 +148,8 @@ parm$ppn_female <- 0.5
 #!# Start here with loading the environment!!!
 
 ## function input to RTMB
-new_f <- function(parm) reclasso(by=parm, {
-  getAll(dat,parm) 
+new_f <- function(parm) reclasso( by=parm, {
+  getAll(dat,parm)
   
   len_at_age1 = splinefun(x=pdat11$AgeClass,y=pdat11$pred)
   len_at_age2 = splinefun(x=pdat22$AgeClass,y=pdat22$pred)
@@ -241,8 +242,8 @@ new_f <- function(parm) reclasso(by=parm, {
   # adjust the plus group
   Ny0[max(AAA)] <- Ny0[max(AAA)]/(1-slopea0)
   Ny0 = Ny0/sum(Ny0)
-  
   # adjust the whole vector by total initial abundance
+  REPORT(Ny0)
   Ny0 <- Ny0 * exp(log_init_abundance)
   
   # load vector into N
@@ -441,8 +442,7 @@ new_f <- function(parm) reclasso(by=parm, {
         fec_sa_quant[female,app,qq] * recip_TRO_SY[female,b1] *
         ## prob of parent surviving from B1 to B2
         Pr_Surv_SYAY[female,b1,app,b2] *
-        #N[female,b2,(app + (b2-b1)) |> clamp(A)]/
-          N[female,b1,app] *
+        N[male,b2,(app + (b2-b1)) |> clamp(A)]/N[male,b1,app] *
         ## prob that pp was the father of B2
         fec_sa_quant[female,(app + (b2-b1)) |> clamp(A),qq] * recip_TRO_SY[female,b2] *
         ## lucky litter factor - same cohort HS problem
@@ -478,8 +478,7 @@ new_f <- function(parm) reclasso(by=parm, {
       fec_sa_quant[male,app,qq] * recip_TRO_SY[male,b1] *
         ## prob of parent surviving from B1 to B2
         Pr_Surv_SYAY[male,b1,app,b2] *
-          #N[male,b2,(app + (b2-b1)) |> clamp(A)]/
-          N[male,b1,app] *
+        N[male,b2,(app + (b2-b1)) |> clamp(A)]/N[male,b1,app] *
         ## prob that pp was the father of B2
         fec_sa_quant[male,(app + (b2-b1)) |> clamp(A),qq] * recip_TRO_SY[male,b2] *
         ## lucky litter factor - same cohort HS problem
@@ -579,29 +578,8 @@ new_f <- function(parm) reclasso(by=parm, {
   E_N_TKP_SYLSYL <- n_comps_POP_SYLSYL* Pr_TKP_SYLSYL
   
   ## summing likelihoods for all cases
-  #nll <- nll - sum(dpois(c(N_TKP_SYLSYL),c(E_N_TKP_SYLSYL),log = T))
-   # for(s1 in 1){
-   #     for(y1 in 10){
-   #         for(l1 in LENGTH_CLASSES){
-   #             for(s2 in 1){
-   #                 for(y2 in SAMPY){
-   #                     for(l2 in LENGTH_CLASSES){
-   #                         N_TKP = N_TKP_SYLSYL[s1,y1,l1,s2,y2,l2][[1]]
-   #                         #N_TKP = N_TKP_SYLSYL[SLICE=s1,SLICE=y1,SLICE=l1,SLICE=s2,SLICE=y2,SLICE=l2]
-   #                         E_TKP = E_N_TKP_SYLSYL[s1,y1,l1,s2,y2,l2][[1]]
-   #                         Pr_TKP = Pr_TKP_SYLSYL[s1,y1,l1,s2,y2,l2][[1]]
-   #                         n_compy = n_comps_POP_SYLSYL[s1,y1,l1,s2,y2,l2][[1]]
-   #                         nll = nll - dpois(N_TKP,E_TKP,log=TRUE)
-   #                         ##nll = nll - dbinom(N_TKP,n_compy,Pr_TKP,TRUE)
-   #                     }
-   #                 }
-   #             }
-   #         }
-   #     }
-   # }
-   # REPORT(N_TKP)
-   # REPORT(E_TKP)
-
+  nll <- nll - sum(dpois(c(N_TKP_SYLSYL),c(E_N_TKP_SYLSYL),log = T),na.rm = T)
+  
   ####
   ### Add mitoDNA for half-sibling groups
   ####
@@ -613,16 +591,16 @@ new_f <- function(parm) reclasso(by=parm, {
   #   TKP_s2 <- TKPairs$s2[i]
   #   TKP_y2 <- TKPairs$y2[i]
   #   TKP_l2 <- TKPairs$l2[i]
-  # 
+  #   
   #   TKP_h1 <- TKPairs$h1[i]
   #   TKP_h2 <- TKPairs$h2[i]
-  # 
+  #   
   #   ## conditionalish probabilities for all four cases
   #   #HSP maternal - if they match it's 1, no match 0
   #   Pr_h2_h1_HSP_Mat <- ifelse(TKP_h1==TKP_h2,1,0)
   #   #HSP paternal - prob of match is just the haplotype frequency
   #   Pr_h2_h1_HSP_Pat <- HapFreq[TKP_h2]
-  # 
+  #   
   #   #GPP maternal - nested ifelse where sex of grandparent is male/female
   #   #for maternal grandmother, it is the 1/0 prob like mat HS
   #   # for maternal grandfather, is the hap frequency
@@ -633,7 +611,7 @@ new_f <- function(parm) reclasso(by=parm, {
   #   Pr_h2_h1_GPP_Pat1 <- HapFreq[TKP_h2]
   #   Pr_h2_h1_GPP_Pat2 <- HapFreq[TKP_h2]
   #   ## stitch together 6 cases into the overall probability of h1 and h2 to be added to the likelihood
-  #   Pr_h2_h1_TKP_SYLSYL <-
+  #   Pr_h2_h1_TKP_SYLSYL <- 
   #     # prob of mat HSP for SYLSYL pair i multiplied by the haplotype probability
   #     Pr_HSP_Mat_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_HSP_Mat +
   #     # prob of pat HSP for SYLSYL pair i multiplied by the haplotype probability
@@ -648,17 +626,17 @@ new_f <- function(parm) reclasso(by=parm, {
   #     # prob of pat GPP for SYLSYL pair i multiplied by the haplotype probability
   #     # for the problem case when grandchild is indiv 1
   #     Pr_GPP_Pat_SYLSYL2[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Pat2
-  # 
+  #   
   #   #divide probability the same denominator - Pr_TKP_SYLSYL because we've established that they are
   #   #SOKPs before we started the loop
   #   full_hap_Pr <- Pr_h2_h1_TKP_SYLSYL/Pr_TKP_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,
   #                                                    SLICE=TKP_l1,SLICE=TKP_s2,
   #                                                    SLICE=TKP_y2,SLICE=TKP_l2]
-  # 
+  #   
   #   #add prob to the likelihood
   #   nll <- nll - log(full_hap_Pr)
   # }
-  #
+  # 
   ## Age composition data
   #samp_asyl is an input created for the data
   #adds to the likelihood probabilities based on the age composition
@@ -671,19 +649,9 @@ new_f <- function(parm) reclasso(by=parm, {
   REPORT(Z)
   REPORT(Pr_POP_SYLAB)
   REPORT(TRO_SY)
-  REPORT(Pr_Surv_SYAY)
-  #REPORT(E_POP_SYLSYL)
-  #REPORT(E_N_TKP_SYLSYL)
-  REPORT(Pr_TKP_SYLSYL)
-  # REPORT(Pr_HSP_Mat_BB)
-  # REPORT(Pr_HSP_Pat_BB)
-  # REPORT(Pr_HSP_Mat_SYLSYL)
-  # REPORT(Pr_HSP_Pat_SYLSYL)  
-  # REPORT(Pr_GPP_Mat_SYLSYL1)
-  # REPORT(Pr_GPP_Mat_SYLSYL2) 
-  # REPORT(Pr_GPP_Pat_SYLSYL1)
-  # REPORT(Pr_GPP_Pat_SYLSYL2)
-  
+  REPORT(E_POP_SYLSYL)
+  REPORT(E_N_TKP_SYLSYL)
+  REPORT(fec_sa)
   ##Return nll
   nll
 })
@@ -691,51 +659,20 @@ new_f <- function(parm) reclasso(by=parm, {
 ##FOR NOW DISABLE recruitment parameters
 tmpout <- new_f(parm)
 
-tmbmap = list(noise_logrec_dev=as.factor(rep(NA,length(parm$noise_logrec_dev))),
-              noise_rec_dev_sd_log = as.factor(NA),
-              ppn_female = as.factor(NA),
-              log_lucky_litter_par = as.factor(1),
-              log_Z = as.factor(c(1,1)),
-              log_bexp = as.factor(c(NA,NA)))
+tmbmap = list(noise_logrec_dev=as.factor(rep(NA,length(parm$noise_logrec_dev))),noise_rec_dev_sd_log = as.factor(NA),ppn_female = as.factor(NA),log_Z=factor(c(NA,NA)),log_lucky_litter_par=as.factor(NA),log_bexp=as.factor(c(NA,NA)))
 
 testo = MakeADFun(new_f,parm,random=c("rw_log_rec"),silent=FALSE,map=tmbmap)
 
-#badpar <- c(-1.20352,10.0034,9.99660,11.0040,-1.59915,-1.58924,0.00239148,0.0397631,0.0269279,-1.63183,0.418786)
-#testo$fn(badpar)
-#testo$gr(badpar)
-
-##grady = testo$gr()
-##names(grady) = names(testo$par)
-
+badpar <- c(-1.20352,10.0034,9.99660,11.0040,-1.59915,-1.58924,0.00239148,0.0397631,0.0269279,-1.63183,0.418786)
+testo$fn(badpar)
+testo$gr(badpar)
+grady = testo$gr()
+names(grady) = names(testo$par)
 
 repp <- testo$report()
-
-Pr_POP_SYLAB = repp$Pr_POP_SYLAB
-Pr_POP_SYAB = apply(Pr_POP_SYLAB,c(1,2,4,5),sum)
-
-
-
-dadC = simCheck$dadCdf |>
-    mutate(pdy = as.numeric(as.character(pdy))) |>
-    filter(pdy >= 190, pdy <= 195) |>
-    filter(kby >= 190, kby <= 195) |>
-    mutate(pdy2 = factor(pdy,levels=190:195,labels=10:15),kby2=factor(kby,levels=190:195,labels=10:15))
-
-momC = simCheck$momCdf |>
-    mutate(mdy = as.numeric(as.character(mdy))) |>
-    filter(mdy >= 190, mdy <= 195) |>
-    filter(kby >= 190, kby <= 195) |>
-    mutate(mdy2 = factor(mdy,levels=190:195,labels=10:15),kby2=factor(kby,levels=190:195,labels=10:15))
-
-Pr_POP_SYABdf = as.data.frame.table(Pr_POP_SYAB)
-
-Pr_POP_YBdf = split(Pr_POP_SYBdf,Pr_POP_SYBdf$s1)
-
-
-
 opt <- nlminb(testo$par, testo$fn, testo$gr,control = list(trace=0,iter.max=1000,eval.max=1000))
 
-expsdr <- sdreport(testo)
+ expsdr <- sdreport(testo)
 
 pl <- as.list(sdr, "Est")
 plsd <- as.list(sdr, "Std")

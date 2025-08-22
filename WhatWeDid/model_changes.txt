@@ -1,0 +1,319 @@
+18a19,21
+> POP_counts = read.csv("./Inputs/POPs_ncomp_df_072325.csv")
+> 
+> 
+35a39,44
+> ##Stuff for making splines
+> dat$pdat11 <- pdat1
+> dat$pdat22 <- pdat2
+> dat$sdpredr11 <- sdpredr1
+> dat$sdpredr22 <- sdpredr2
+> 
+38,39d46
+< dat$n_POP_SYLSYL <- n_POP_SYLSYL
+< dat$n_comps_POP_SYLSYL <- n_comps_POP_SYLSYL
+41c48,74
+< dat$TKPairs <- TKPairs
+---
+> ##dat$TKPairs <- TKPairs
+> 
+> 
+> ###CREATE POP/HSP offarrays
+> n_POP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$LENGTH_CLASSES,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$LENGTH_CLASSES))
+> 
+> n_comps_POP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$LENGTH_CLASSES,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$LENGTH_CLASSES))
+> 
+> N_TKP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$LENGTH_CLASSES,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$LENGTH_CLASSES))
+> 
+> ##FOR LATER??????
+> N_comps_TKP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$LENGTH_CLASSES,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$LENGTH_CLASSES))
+> 
+> fill_offcrud <- function(count_df,count_array,target_col="POP"){
+>     count_df = count_df[count_df[,target_col] != 0,]
+>     for(i in 1:nrow(count_df)){
+>         count_array[count_df$sex.x[i],count_df$SampYear.x[i],count_df$lbin.x[i],count_df$sex.y[i],count_df$SampYear.y[i],count_df$lbin.y[i]] = count_df[i,target_col]
+>     }
+>     count_array
+> }
+> 
+> dat$n_POP_SYLSYL = fill_offcrud(POP_counts,n_POP_SYLSYL,"POP")
+> dat$n_comps_POP_SYLSYL = fill_offcrud(POP_counts,n_comps_POP_SYLSYL,"ncomp")
+> 
+> ###
+> 
+> 
+48c81
+< dat$HapFreq <- HapFreq
+---
+> #dat$HapFreq <- HapFreq
+90,91c123,124
+< #log recruitment - random effect length popdynyears
+< parm$rw_log_rec <- Narray[1,,1] * 0
+---
+> #log recruitment - random effect length popdyn years
+> parm$rw_log_rec <- rep(log(10000),length(Narray[1,,1]))
+96c129
+< parm$log_rec <- c(10,10)
+---
+> ##parm$log_rec <- c(10,10)
+98c131,132
+< parm$log_init_abundance <- log(sum(Narray[-1,1,]))
+---
+> #currently have the summed abundance of year 181 in the simulation
+> parm$log_init_abundance <- log(74884)
+100c134
+< parm$log_Z <- log(c(0.2,0.2))
+---
+> parm$log_Z <- log(c(0.18,0.18))
+102c136,140
+< parm$log_bexp <- c(0,0)
+---
+> #grabbed the bexp value from the simulation
+> #currently there is no a value in the model
+> parm$log_bexp <- log(c(3.624,3.624))
+> 
+> #no lucky litter analog in the simulation
+106,107c144,145
+< parm$logslopea0 <- log(0.2)
+< #sex ratio
+---
+> ##parm$logslopea0 <- log(0.2)
+> #sex ratio - sim has equal sex ratio
+109a148,149
+> #!# Start here with loading the environment!!!
+> 
+113a154,161
+>   len_at_age1 = splinefun(x=pdat11$AgeClass,y=pdat11$pred)
+>   len_at_age2 = splinefun(x=pdat22$AgeClass,y=pdat22$pred)
+>   
+>   
+>   sd_at_len1 = splinefun(x=sdpredr11$mean,y=sdpredr22$sd)
+>   sd_at_len2 = splinefun(x=sdpredr11$mean,y=sdpredr22$sd)
+>   
+>   
+117c165
+<   rec <- exp(log_rec)
+---
+>   ##rec <- exp(log_rec)
+120c168,169
+<   slopea0 <- exp(logslopea0)
+---
+>   slopea0 <- mean(exp(log_Z))
+>   ##slopea0 <- exp(logslopea0)
+127c176
+<   
+---
+>    
+153,154c202,207
+<   nll <- nll - sum(dnorm(diff(rw_log_rec), mean=0, sd=rw_rec_sd))
+<   nll <- nll - sum(dnorm(noise_logrec_dev, mean=0, sd=noise_rec_dev_sd))
+---
+>   ##nll <- nll - sum(dnorm(diff(rw_log_rec), mean=0, sd=rw_rec_sd))
+>   ##nll <- nll - sum(dnorm(noise_logrec_dev, mean=0, sd=noise_rec_dev_sd))
+>   for(i in 2:length(rw_log_rec)){
+>     nll <- nll - dnorm(rw_log_rec[i],rw_log_rec[i-1],rw_rec_sd)
+>   }
+>   
+157c210
+<   cumul_rw_logrec <- cumsum(rw_log_rec)
+---
+>   ##cumul_rw_logrec <- cumsum(rw_log_rec)
+160c213,215
+<   rec_mul <- exp(cumul_rw_logrec + noise_logrec_dev) 
+---
+>   ##rec_mul <- exp(cumul_rw_logrec + noise_logrec_dev) 
+>   ##rec_mul <- exp(cumul_rw_logrec)
+>     
+164c219,220
+<     N[s,,2] = rec[s] * rec_mul
+---
+>     #N[s,,2] = rec[s] * rec_mul
+>     N[s,,2] = exp(rw_log_rec)
+177,178c233,235
+<   Ny0 <- offarray(0, dimseq = list(AGE=A))
+<   Ny0[min(A)] <- 1
+---
+>   AAA = A[-1]
+>   Ny0 <- offarray(0, dimseq = list(AGE=AAA))
+>   Ny0[min(AAA)] <- 1
+181,182c238,239
+<   for (a in (min(A)+1):max(A)) {
+<     Ny0[a] <- Ny0[a-1] * slopea0
+---
+>   for (a in (min(AAA)+1):max(AAA)) {
+>     Ny0[a] <- Ny0[a-1] * exp(-slopea0)
+186,187c243,244
+<   Ny0[max(A)] <- Ny0[max(A)]/(1-slopea0)
+<   
+---
+>   Ny0[max(AAA)] <- Ny0[max(AAA)]/(1-slopea0)
+>   Ny0 = Ny0/sum(Ny0)
+188a246
+>   REPORT(Ny0)
+193,195c251,254
+<   N[female,min(POPY),] <- Ny0 * ppn_female
+<   N[male,min(POPY),] <- Ny0 * (1-ppn_female)
+<   
+---
+>   for(aa in (min(AAA)):max(AAA)){
+>   N[female,min(POPY),aa] <- Ny0[aa] * ppn_female
+>   N[male,min(POPY),aa] <- Ny0[aa] * (1-ppn_female)
+>   }
+308c367
+<    #                               Prob <- (y1 >= b2) * # otherwise Molly was dead before Dolly born
+---
+>   #                                Prob <- (y1 >= b2) * # otherwise Molly was dead before Dolly born
+310c369
+<    #                                 (l1_at_B2 > 0) * # otherwise length shows that Molly wouldn't have been born yet
+---
+>   #                                  (l1_at_B2 > 0) * # otherwise length shows that Molly wouldn't have been born yet
+313c372
+<    #                               Prob
+---
+>   #                                Prob
+527,580c586,639
+<   for (i in 1:nrow(TKPairs)) {
+<     #grabbing values fron the mtDNA data input
+<     TKP_s1 <- TKPairs$s1[i]
+<     TKP_y1 <- TKPairs$y1[i]
+<     TKP_l1 <- TKPairs$l1[i]
+<     TKP_s2 <- TKPairs$s2[i]
+<     TKP_y2 <- TKPairs$y2[i]
+<     TKP_l2 <- TKPairs$l2[i]
+<     
+<     TKP_h1 <- TKPairs$h1[i]
+<     TKP_h2 <- TKPairs$h2[i]
+<     
+<     ## conditionalish probabilities for all four cases
+<     #HSP maternal - if they match it's 1, no match 0
+<     Pr_h2_h1_HSP_Mat <- ifelse(TKP_h1==TKP_h2,1,0)
+<     #HSP paternal - prob of match is just the haplotype frequency
+<     Pr_h2_h1_HSP_Pat <- HapFreq[TKP_h2]
+<     
+<     #GPP maternal - nested ifelse where sex of grandparent is male/female
+<     #for maternal grandmother, it is the 1/0 prob like mat HS
+<     # for maternal grandfather, is the hap frequency
+<     Pr_h2_h1_GPP_Mat1 <- ifelse(TKP_s1==female,ifelse(TKP_h1==TKP_h2,1,0),HapFreq[TKP_h2])
+<     # case where bc of weird length stuff indiv 2 is the maternal grandparent instead of grandchild
+<     Pr_h2_h1_GPP_Mat2 <- ifelse(TKP_s2==female,ifelse(TKP_h2==TKP_h1,1,0),HapFreq[TKP_h2])
+<     #GPP paternal - heritance is broken so whatevs
+<     Pr_h2_h1_GPP_Pat1 <- HapFreq[TKP_h2]
+<     Pr_h2_h1_GPP_Pat2 <- HapFreq[TKP_h2]
+<     ## stitch together 6 cases into the overall probability of h1 and h2 to be added to the likelihood
+<     Pr_h2_h1_TKP_SYLSYL <- 
+<       # prob of mat HSP for SYLSYL pair i multiplied by the haplotype probability
+<       Pr_HSP_Mat_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_HSP_Mat +
+<       # prob of pat HSP for SYLSYL pair i multiplied by the haplotype probability
+<       Pr_HSP_Pat_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_HSP_Pat +
+<       # prob of mat GPP for SYLSYL pair i multiplied by the haplotype probability
+<       Pr_GPP_Mat_SYLSYL1[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Mat1 +
+<       # prob of mat GPP for SYLSYL pair i multiplied by the haplotype probability
+<       # for the problem case when grandchild is indiv 1
+<       Pr_GPP_Mat_SYLSYL2[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Mat2 +
+<       # prob of pat GPP for SYLSYL pair i multiplied by the haplotype probability
+<       Pr_GPP_Pat_SYLSYL1[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Pat1 +
+<       # prob of pat GPP for SYLSYL pair i multiplied by the haplotype probability
+<       # for the problem case when grandchild is indiv 1
+<       Pr_GPP_Pat_SYLSYL2[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Pat2
+<     
+<     #divide probability the same denominator - Pr_TKP_SYLSYL because we've established that they are
+<     #SOKPs before we started the loop
+<     full_hap_Pr <- Pr_h2_h1_TKP_SYLSYL/Pr_TKP_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,
+<                                                      SLICE=TKP_l1,SLICE=TKP_s2,
+<                                                      SLICE=TKP_y2,SLICE=TKP_l2]
+<     
+<     #add prob to the likelihood
+<     nll <- nll - log(full_hap_Pr)
+<   }
+<   
+---
+>   # for (i in 1:nrow(TKPairs)) {
+>   #   #grabbing values fron the mtDNA data input
+>   #   TKP_s1 <- TKPairs$s1[i]
+>   #   TKP_y1 <- TKPairs$y1[i]
+>   #   TKP_l1 <- TKPairs$l1[i]
+>   #   TKP_s2 <- TKPairs$s2[i]
+>   #   TKP_y2 <- TKPairs$y2[i]
+>   #   TKP_l2 <- TKPairs$l2[i]
+>   #   
+>   #   TKP_h1 <- TKPairs$h1[i]
+>   #   TKP_h2 <- TKPairs$h2[i]
+>   #   
+>   #   ## conditionalish probabilities for all four cases
+>   #   #HSP maternal - if they match it's 1, no match 0
+>   #   Pr_h2_h1_HSP_Mat <- ifelse(TKP_h1==TKP_h2,1,0)
+>   #   #HSP paternal - prob of match is just the haplotype frequency
+>   #   Pr_h2_h1_HSP_Pat <- HapFreq[TKP_h2]
+>   #   
+>   #   #GPP maternal - nested ifelse where sex of grandparent is male/female
+>   #   #for maternal grandmother, it is the 1/0 prob like mat HS
+>   #   # for maternal grandfather, is the hap frequency
+>   #   Pr_h2_h1_GPP_Mat1 <- ifelse(TKP_s1==female,ifelse(TKP_h1==TKP_h2,1,0),HapFreq[TKP_h2])
+>   #   # case where bc of weird length stuff indiv 2 is the maternal grandparent instead of grandchild
+>   #   Pr_h2_h1_GPP_Mat2 <- ifelse(TKP_s2==female,ifelse(TKP_h2==TKP_h1,1,0),HapFreq[TKP_h2])
+>   #   #GPP paternal - heritance is broken so whatevs
+>   #   Pr_h2_h1_GPP_Pat1 <- HapFreq[TKP_h2]
+>   #   Pr_h2_h1_GPP_Pat2 <- HapFreq[TKP_h2]
+>   #   ## stitch together 6 cases into the overall probability of h1 and h2 to be added to the likelihood
+>   #   Pr_h2_h1_TKP_SYLSYL <- 
+>   #     # prob of mat HSP for SYLSYL pair i multiplied by the haplotype probability
+>   #     Pr_HSP_Mat_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_HSP_Mat +
+>   #     # prob of pat HSP for SYLSYL pair i multiplied by the haplotype probability
+>   #     Pr_HSP_Pat_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_HSP_Pat +
+>   #     # prob of mat GPP for SYLSYL pair i multiplied by the haplotype probability
+>   #     Pr_GPP_Mat_SYLSYL1[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Mat1 +
+>   #     # prob of mat GPP for SYLSYL pair i multiplied by the haplotype probability
+>   #     # for the problem case when grandchild is indiv 1
+>   #     Pr_GPP_Mat_SYLSYL2[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Mat2 +
+>   #     # prob of pat GPP for SYLSYL pair i multiplied by the haplotype probability
+>   #     Pr_GPP_Pat_SYLSYL1[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Pat1 +
+>   #     # prob of pat GPP for SYLSYL pair i multiplied by the haplotype probability
+>   #     # for the problem case when grandchild is indiv 1
+>   #     Pr_GPP_Pat_SYLSYL2[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Pat2
+>   #   
+>   #   #divide probability the same denominator - Pr_TKP_SYLSYL because we've established that they are
+>   #   #SOKPs before we started the loop
+>   #   full_hap_Pr <- Pr_h2_h1_TKP_SYLSYL/Pr_TKP_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,
+>   #                                                    SLICE=TKP_l1,SLICE=TKP_s2,
+>   #                                                    SLICE=TKP_y2,SLICE=TKP_l2]
+>   #   
+>   #   #add prob to the likelihood
+>   #   nll <- nll - log(full_hap_Pr)
+>   # }
+>   # 
+588c647,654
+<   REPORTO(N, Z, E_POP_SYLSYL, E_N_TKP_SYLSYL, fec_sa)
+---
+>   ##REPORTO(N, Z, E_POP_SYLSYL, E_N_TKP_SYLSYL, fec_sa)
+>   REPORT(N)
+>   REPORT(Z)
+>   REPORT(Pr_POP_SYLAB)
+>   REPORT(TRO_SY)
+>   REPORT(E_POP_SYLSYL)
+>   REPORT(E_N_TKP_SYLSYL)
+>   REPORT(fec_sa)
+596c662
+< tmbmap = list(rw_log_rec=as.factor(rep(NA,length(parm$rw_log_rec))))
+---
+> tmbmap = list(noise_logrec_dev=as.factor(rep(NA,length(parm$noise_logrec_dev))),noise_rec_dev_sd_log = as.factor(NA),ppn_female = as.factor(NA),log_Z=factor(c(NA,NA)),log_lucky_litter_par=as.factor(NA),log_bexp=as.factor(c(NA,NA)))
+598c664
+< testo = MakeADFun(new_f,parm,random=c("rw_log_rec"))
+---
+> testo = MakeADFun(new_f,parm,random=c("rw_log_rec"),silent=FALSE,map=tmbmap)
+600,601c666,670
+< testo$par
+< testo$gr()
+---
+> badpar <- c(-1.20352,10.0034,9.99660,11.0040,-1.59915,-1.58924,0.00239148,0.0397631,0.0269279,-1.63183,0.418786)
+> testo$fn(badpar)
+> testo$gr(badpar)
+> grady = testo$gr()
+> names(grady) = names(testo$par)
+604c673
+< opt <- nlminb(testo$par, testo$fn, testo$gr)
+---
+> opt <- nlminb(testo$par, testo$fn, testo$gr,control = list(trace=0,iter.max=1000,eval.max=1000))
+606c675
+< sdr <- sdreport(testo)
+---
+>  expsdr <- sdreport(testo)

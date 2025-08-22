@@ -112,7 +112,7 @@ dat$prob_len_at_age <- offarray(raw_prob_len_at_age,
 #fecundity functions
 dat <- within(dat, {
   la_shape_SA <- (la_means_SA/la_sd_SA)^2
-  la_scale_SA <- la_sd_SA^2/la_means_SA
+  la_scale_SA <- la_means_SA/la_shape_SA
 })
 
 ####
@@ -148,7 +148,7 @@ parm$ppn_female <- 0.5
 
 ## function input to RTMB
 new_f <- function(parm) reclasso(by=parm, {
-  getAll(dat,parm) 
+  getAll(dat,parm)
   
   len_at_age1 = splinefun(x=pdat11$AgeClass,y=pdat11$pred)
   len_at_age2 = splinefun(x=pdat22$AgeClass,y=pdat22$pred)
@@ -421,6 +421,13 @@ new_f <- function(parm) reclasso(by=parm, {
       Pr_POP_SYLSYL1[s2,y2,lc2,s1,y1,lc1]
     }
   )
+
+###Just junk
+
+  REPORT(Pr_POP_SYLB)
+### END OF JUNK
+  
+  
   
   #expected number of POPs given probability and number of comparisons
   E_POP_SYLSYL <- n_comps_POP_SYLSYL * (Pr_POP_SYLSYL1 + Pr_POP_SYLSYL2)
@@ -580,28 +587,28 @@ new_f <- function(parm) reclasso(by=parm, {
   
   ## summing likelihoods for all cases
   #nll <- nll - sum(dpois(c(N_TKP_SYLSYL),c(E_N_TKP_SYLSYL),log = T))
-   # for(s1 in 1){
-   #     for(y1 in 10){
-   #         for(l1 in LENGTH_CLASSES){
-   #             for(s2 in 1){
-   #                 for(y2 in SAMPY){
-   #                     for(l2 in LENGTH_CLASSES){
-   #                         N_TKP = N_TKP_SYLSYL[s1,y1,l1,s2,y2,l2][[1]]
-   #                         #N_TKP = N_TKP_SYLSYL[SLICE=s1,SLICE=y1,SLICE=l1,SLICE=s2,SLICE=y2,SLICE=l2]
-   #                         E_TKP = E_N_TKP_SYLSYL[s1,y1,l1,s2,y2,l2][[1]]
-   #                         Pr_TKP = Pr_TKP_SYLSYL[s1,y1,l1,s2,y2,l2][[1]]
-   #                         n_compy = n_comps_POP_SYLSYL[s1,y1,l1,s2,y2,l2][[1]]
-   #                         nll = nll - dpois(N_TKP,E_TKP,log=TRUE)
-   #                         ##nll = nll - dbinom(N_TKP,n_compy,Pr_TKP,TRUE)
-   #                     }
-   #                 }
-   #             }
-   #         }
-   #     }
-   # }
-   # REPORT(N_TKP)
-   # REPORT(E_TKP)
-
+  # for(s1 in 1){
+  #     for(y1 in 10){
+  #         for(l1 in LENGTH_CLASSES){
+  #             for(s2 in 1){
+  #                 for(y2 in SAMPY){
+  #                     for(l2 in LENGTH_CLASSES){
+  #                         N_TKP = N_TKP_SYLSYL[s1,y1,l1,s2,y2,l2][[1]]
+  #                         #N_TKP = N_TKP_SYLSYL[SLICE=s1,SLICE=y1,SLICE=l1,SLICE=s2,SLICE=y2,SLICE=l2]
+  #                         E_TKP = E_N_TKP_SYLSYL[s1,y1,l1,s2,y2,l2][[1]]
+  #                         Pr_TKP = Pr_TKP_SYLSYL[s1,y1,l1,s2,y2,l2][[1]]
+  #                         n_compy = n_comps_POP_SYLSYL[s1,y1,l1,s2,y2,l2][[1]]
+  #                         nll = nll - dpois(N_TKP,E_TKP,log=TRUE)
+  #                         ##nll = nll - dbinom(N_TKP,n_compy,Pr_TKP,TRUE)
+  #                     }
+  #                 }
+  #             }
+  #         }
+  #     }
+  # }
+  # REPORT(N_TKP)
+  # REPORT(E_TKP)
+  
   ####
   ### Add mitoDNA for half-sibling groups
   ####
@@ -613,16 +620,16 @@ new_f <- function(parm) reclasso(by=parm, {
   #   TKP_s2 <- TKPairs$s2[i]
   #   TKP_y2 <- TKPairs$y2[i]
   #   TKP_l2 <- TKPairs$l2[i]
-  # 
+  #   
   #   TKP_h1 <- TKPairs$h1[i]
   #   TKP_h2 <- TKPairs$h2[i]
-  # 
+  #   
   #   ## conditionalish probabilities for all four cases
   #   #HSP maternal - if they match it's 1, no match 0
   #   Pr_h2_h1_HSP_Mat <- ifelse(TKP_h1==TKP_h2,1,0)
   #   #HSP paternal - prob of match is just the haplotype frequency
   #   Pr_h2_h1_HSP_Pat <- HapFreq[TKP_h2]
-  # 
+  #   
   #   #GPP maternal - nested ifelse where sex of grandparent is male/female
   #   #for maternal grandmother, it is the 1/0 prob like mat HS
   #   # for maternal grandfather, is the hap frequency
@@ -633,7 +640,7 @@ new_f <- function(parm) reclasso(by=parm, {
   #   Pr_h2_h1_GPP_Pat1 <- HapFreq[TKP_h2]
   #   Pr_h2_h1_GPP_Pat2 <- HapFreq[TKP_h2]
   #   ## stitch together 6 cases into the overall probability of h1 and h2 to be added to the likelihood
-  #   Pr_h2_h1_TKP_SYLSYL <-
+  #   Pr_h2_h1_TKP_SYLSYL <- 
   #     # prob of mat HSP for SYLSYL pair i multiplied by the haplotype probability
   #     Pr_HSP_Mat_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_HSP_Mat +
   #     # prob of pat HSP for SYLSYL pair i multiplied by the haplotype probability
@@ -648,17 +655,17 @@ new_f <- function(parm) reclasso(by=parm, {
   #     # prob of pat GPP for SYLSYL pair i multiplied by the haplotype probability
   #     # for the problem case when grandchild is indiv 1
   #     Pr_GPP_Pat_SYLSYL2[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Pat2
-  # 
+  #   
   #   #divide probability the same denominator - Pr_TKP_SYLSYL because we've established that they are
   #   #SOKPs before we started the loop
   #   full_hap_Pr <- Pr_h2_h1_TKP_SYLSYL/Pr_TKP_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,
   #                                                    SLICE=TKP_l1,SLICE=TKP_s2,
   #                                                    SLICE=TKP_y2,SLICE=TKP_l2]
-  # 
+  #   
   #   #add prob to the likelihood
   #   nll <- nll - log(full_hap_Pr)
   # }
-  #
+  # 
   ## Age composition data
   #samp_asyl is an input created for the data
   #adds to the likelihood probabilities based on the age composition
@@ -672,8 +679,8 @@ new_f <- function(parm) reclasso(by=parm, {
   REPORT(Pr_POP_SYLAB)
   REPORT(TRO_SY)
   REPORT(Pr_Surv_SYAY)
-  #REPORT(E_POP_SYLSYL)
-  #REPORT(E_N_TKP_SYLSYL)
+  REPORT(E_POP_SYLSYL)
+  REPORT(E_N_TKP_SYLSYL)
   REPORT(Pr_TKP_SYLSYL)
   # REPORT(Pr_HSP_Mat_BB)
   # REPORT(Pr_HSP_Pat_BB)
@@ -710,10 +717,8 @@ testo = MakeADFun(new_f,parm,random=c("rw_log_rec"),silent=FALSE,map=tmbmap)
 
 repp <- testo$report()
 
-Pr_POP_SYLAB = repp$Pr_POP_SYLAB
-Pr_POP_SYAB = apply(Pr_POP_SYLAB,c(1,2,4,5),sum)
-
-
+E_POP_SYLSYL = repp$E_POP_SYLSYL1
+E_POP_SYY = apply(E_POP_SYLSYL,c(1,2,5),sum)
 
 dadC = simCheck$dadCdf |>
     mutate(pdy = as.numeric(as.character(pdy))) |>
@@ -727,9 +732,20 @@ momC = simCheck$momCdf |>
     filter(kby >= 190, kby <= 195) |>
     mutate(mdy2 = factor(mdy,levels=190:195,labels=10:15),kby2=factor(kby,levels=190:195,labels=10:15))
 
-Pr_POP_SYABdf = as.data.frame.table(Pr_POP_SYAB)
+E_POP_SYYdf = as.data.frame.table(E_POP_SYY)
 
-Pr_POP_YBdf = split(Pr_POP_SYBdf,Pr_POP_SYBdf$s1)
+E_POP_YYdf = split(E_POP_SYYdf,E_POP_SYYdf$s1)
+E_POP_YYdf[[1]]
+dadC
+
+sum(repp$Pr_POP_SYLAB)
+sum(repp$E_POP_SYLSYL)
+sum(repp$E_N_TKP_SYLSYL)
+sum(repp$Pr_TKP_SYLSYL)
+sum(repp$Pr_HSP_Mat_SYLSYL)
+sum(repp$Pr_HSP_Pat_SYLSYL)
+sum(repp$Pr_GPP_Mat_SYLSYL2)
+sum(repp$Pr_GPP_Pat_SYLSYL2)
 
 
 
