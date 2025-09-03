@@ -8,14 +8,18 @@ library(offartmb)
 
 #load simulated data inputs
 load("Inputs/CensusSize_Sim_071224.rda")
-load("Inputs/haps_HSs_Sim_072525.rda")
+
+# read in otolith data
+lengthage <- read.csv("E:/ClonedRepositories/ForTheHalibut/Input/Armsworthy&Campana_ladata_nofilter.csv")
+
 #source functions for RTMB model
 source("ModelFunction/prob_la.R")
 source("ModelFunction/growthFunGen.R")
-
+source("ModelFunction/LengthBinInputs.R")
 ##read in the sim check
 simCheck =  readRDS("simCheck.rds")
 
+# read in the simulated POP and HSP inputs
 rel_counts = read.csv("./Inputs/Relate_ncomp_df_072525.csv")
 
 ####
@@ -27,32 +31,23 @@ dat$Narray <- Narray
 dat$A <- 2:30
 dat$POPY <- 1:15
 dat$SAMPY <- 10:15
-dat$Lvec <- seq(10,220,10)
-dat$LENGTH_CLASSES <- 1:length(dat$Lvec)
 dat$SEXES <- 1:2
-dat$nquant <- 5
+dat$Lvec <- 1:10
 dat$male <- 1
 dat$female <- 2
 dat$PopYear1 <- dat$POPY[1]
-dat$la_key <- read.table("Inputs/LA_MeanSD.txt",header = T, sep = "\t",stringsAsFactors = F)
-##Stuff for making splines
-dat$pdat11 <- pdat1
-dat$pdat22 <- pdat2
-dat$sdpredr11 <- sdpredr1
-dat$sdpredr22 <- sdpredr2
-
-
-#number of POPs and comps as array (from script 2 that processes sim results)
-#dat$N_TKP_SYLSYL <- N_TKP_SYLSYL
-dat$TKPairs <- TKPairs
-
+dat$la_key <- lengthage %>% 
+  filter(OtoAge <= max(A)) %>% 
+  group_by(ObsSex,OtoAge) %>% 
+  summarise(Means=mean(Length),SDs=sd(Length)) %>% 
+  rename(sex=ObsSex,AgeClass=OtoAge,mean=Means,sd=SDs)
 
 ###CREATE POP/HSP offarrays
-n_POP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$LENGTH_CLASSES,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$LENGTH_CLASSES))
+n_POP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$Lvec,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$Lvec))
 
-n_comps_POP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$LENGTH_CLASSES,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$LENGTH_CLASSES))
+n_comps_POP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$Lvec,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$Lvec))
 
-N_TKP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$LENGTH_CLASSES,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$LENGTH_CLASSES))
+N_TKP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$Lvec,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$Lvec))
 
 ##FOR LATER??????
 #N_comps_TKP_SYLSYL <- offarray(x=0,dimseq= list(s1=dat$SEXES,y1=dat$SAMPY,lc1=dat$LENGTH_CLASSES,s2=dat$SEXES,y2=dat$SAMPY,lc2=dat$LENGTH_CLASSES))
@@ -84,15 +79,15 @@ raw_la_means_SA <- dat$la_key %>%
   arrange(sex,AgeClass) %>% 
   dplyr::select(sex,AgeClass,mean) %>% 
   filter(AgeClass <= 30) %>% 
-  spread(AgeClass,mean) %>% 
-  dplyr::select(-sex)
+  spread(AgeClass,mean)
+raw_la_means_SA <- raw_la_means_SA[,-1]
 
 raw_la_sd_SA <- dat$la_key %>% 
   arrange(sex,AgeClass) %>% 
   dplyr::select(sex,AgeClass,sd) %>% 
   filter(AgeClass <= 30) %>% 
-  spread(AgeClass,sd) %>% 
-  dplyr::select(-sex)
+  spread(AgeClass,sd)
+raw_la_sd_SA <- raw_la_sd_SA[,-1]
 
 dat$la_means_SA <- offarray(as.matrix(raw_la_means_SA),dimseq=list(s=dat$SEXES, a=dat$A))
 dat$la_sd_SA <- offarray(as.matrix(raw_la_sd_SA),dimseq=list(s=dat$SEXES, a=dat$A))
@@ -104,7 +99,7 @@ raw_prob_len_at_age <- prob_la(Lmax = max(dat$Lvec),
                                dat = dat$la_key)
 
 # Make it into offarray
-dat$prob_len_at_age <- offarray(raw_prob_len_at_age, 
+dat$prob_len_at_age <- offarray(raw_prob_len_at_age,
                                 dimseq=list( s=dat$SEXES, lc=dat$LENGTH_CLASSES, a=dat$A))
 
 ### Fecundity function fix
@@ -320,19 +315,6 @@ new_f <- function(parm) reclasso(by=parm, {
   Pr_POP_SYLAB <- autoloop( 
     s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES, a1=A,
     b2=POPY, {
-      # length of parent
-      l1 <- Lvec[lc1]
-      # quantile of parent at a1 given l1 length
-      qq1 <- pgamma(l1,shape = la_shape_SA[s1,a1],scale = la_scale_SA[s1,a1])+1e-15
-      qq1 <- (a1 < 5) * pgamma(l1,shape = la_shape_SA[s1,a1],scale = la_scale_SA[s1,a1])-1e-15
-      qq1 <- (a1 >= 20) * pgamma(l1,shape = la_shape_SA[s1,a1],scale = la_scale_SA[s1,a1])+1e-15
-      #age of parent when off is born
-      a1_at_B2 <- a1 - (y1 - b2)
-      
-      #length of parent when offspring is born
-      l1_at_B2 <- qgamma(qq1,shape = la_shape_SA[s1,a1_at_B2 |> clamp(A)],
-                         scale = la_scale_SA[s1,a1_at_B2 |> clamp(A)])
-      
       # generate probability given fecundity of par
       # and TRO at the offspring birth year
       Prob <- (y1 >= b2) * # otherwise Molly was dead before Dolly born
