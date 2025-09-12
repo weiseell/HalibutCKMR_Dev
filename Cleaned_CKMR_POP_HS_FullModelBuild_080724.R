@@ -12,6 +12,7 @@ load("Inputs/haps_HSs_Sim_072525.rda")
 #source functions for RTMB model
 source("ModelFunction/prob_la.R")
 source("ModelFunction/growthFunGen.R")
+source("ModelFunction/LengthBinInputsAbsolute.R")
 
 ##read in the sim check
 simCheck =  readRDS("simCheck.rds")
@@ -34,13 +35,11 @@ dat$nquant <- 5
 dat$male <- 1
 dat$female <- 2
 dat$PopYear1 <- dat$POPY[1]
-dat$la_key <- read.table("Inputs/LA_MeanSD.txt",header = T, sep = "\t",stringsAsFactors = F)
-##Stuff for making splines
-dat$pdat11 <- pdat1
-dat$pdat22 <- pdat2
-dat$sdpredr11 <- sdpredr1
-dat$sdpredr22 <- sdpredr2
-
+dat$la_key <- lengthage %>% 
+  filter(OtoAge <= max(A)) %>% 
+  group_by(ObsSex,OtoAge) %>% 
+  summarise(Means=mean(Length),SDs=sd(Length)) %>% 
+  rename(sex=ObsSex,AgeClass=OtoAge,mean=Means,sd=SDs)
 
 #number of POPs and comps as array (from script 2 that processes sim results)
 #dat$N_TKP_SYLSYL <- N_TKP_SYLSYL
@@ -320,24 +319,12 @@ new_f <- function(parm) reclasso(by=parm, {
   Pr_POP_SYLAB <- autoloop( 
     s1=SEXES, y1=SAMPY, lc1=LENGTH_CLASSES, a1=A,
     b2=POPY, {
-      # length of parent
-      l1 <- Lvec[lc1]
-      # quantile of parent at a1 given l1 length
-      qq1 <- pgamma(l1,shape = la_shape_SA[s1,a1],scale = la_scale_SA[s1,a1])+1e-15
-      qq1 <- (a1 < 5) * pgamma(l1,shape = la_shape_SA[s1,a1],scale = la_scale_SA[s1,a1])-1e-15
-      qq1 <- (a1 >= 20) * pgamma(l1,shape = la_shape_SA[s1,a1],scale = la_scale_SA[s1,a1])+1e-15
-      #age of parent when off is born
       a1_at_B2 <- a1 - (y1 - b2)
-      
-      #length of parent when offspring is born
-      l1_at_B2 <- qgamma(qq1,shape = la_shape_SA[s1,a1_at_B2 |> clamp(A)],
-                         scale = la_scale_SA[s1,a1_at_B2 |> clamp(A)])
-      
       # generate probability given fecundity of par
       # and TRO at the offspring birth year
       Prob <- (y1 >= b2) * # otherwise Molly was dead before Dolly born
         (a1_at_B2 >= 2) *
-        make_fecundity(s1,l1_at_B2) * recip_TRO_SY[s1,b2]
+        make_fecundity(s1,LenatB2_SYLAB[s1,y1,lc1,a1,b2]) * recip_TRO_SY[s1,b2]
       
       Prob
     })
@@ -700,7 +687,7 @@ tmbmap = list(noise_logrec_dev=as.factor(rep(NA,length(parm$noise_logrec_dev))),
 
 testo = MakeADFun(new_f,parm,random=c("rw_log_rec"),silent=FALSE,map=tmbmap)
 
-#badpar <- c(-1.20352,10.0034,9.99660,11.0040,-1.59915,-1.58924,0.00239148,0.0397631,0.0269279,-1.63183,0.418786)
+ #badpar <- c(-1.20352,10.0034,9.99660,11.0040,-1.59915,-1.58924,0.00239148,0.0397631,0.0269279,-1.63183,0.418786)
 #testo$fn(badpar)
 #testo$gr(badpar)
 
@@ -729,7 +716,7 @@ momC = simCheck$momCdf |>
 
 Pr_POP_SYABdf = as.data.frame.table(Pr_POP_SYAB)
 
-Pr_POP_YBdf = split(Pr_POP_SYBdf,Pr_POP_SYBdf$s1)
+Pr_POP_YBdf = split(Pr_POP_SYABdf,Pr_POP_SYABdf$s1)
 
 
 
