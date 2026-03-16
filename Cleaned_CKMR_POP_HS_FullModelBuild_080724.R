@@ -592,59 +592,59 @@ new_f <- function(parm) reclasso(by=parm, {
   ####
   ### Add mitoDNA for half-sibling groups
   ####
-  # for (i in 1:nrow(TKPairs)) {
-  #   #grabbing values fron the mtDNA data input
-  #   TKP_s1 <- TKPairs$s1[i]
-  #   TKP_y1 <- TKPairs$y1[i]
-  #   TKP_l1 <- TKPairs$l1[i]
-  #   TKP_s2 <- TKPairs$s2[i]
-  #   TKP_y2 <- TKPairs$y2[i]
-  #   TKP_l2 <- TKPairs$l2[i]
-  # 
-  #   TKP_h1 <- TKPairs$h1[i]
-  #   TKP_h2 <- TKPairs$h2[i]
-  # 
-  #   ## conditionalish probabilities for all four cases
-  #   #HSP maternal - if they match it's 1, no match 0
-  #   Pr_h2_h1_HSP_Mat <- ifelse(TKP_h1==TKP_h2,1,0)
-  #   #HSP paternal - prob of match is just the haplotype frequency
-  #   Pr_h2_h1_HSP_Pat <- HapFreq[TKP_h2]
-  # 
-  #   #GPP maternal - nested ifelse where sex of grandparent is male/female
-  #   #for maternal grandmother, it is the 1/0 prob like mat HS
-  #   # for maternal grandfather, is the hap frequency
-  #   Pr_h2_h1_GPP_Mat1 <- ifelse(TKP_s1==female,ifelse(TKP_h1==TKP_h2,1,0),HapFreq[TKP_h2])
-  #   # case where bc of weird length stuff indiv 2 is the maternal grandparent instead of grandchild
-  #   Pr_h2_h1_GPP_Mat2 <- ifelse(TKP_s2==female,ifelse(TKP_h2==TKP_h1,1,0),HapFreq[TKP_h2])
-  #   #GPP paternal - heritance is broken so whatevs
-  #   Pr_h2_h1_GPP_Pat1 <- HapFreq[TKP_h2]
-  #   Pr_h2_h1_GPP_Pat2 <- HapFreq[TKP_h2]
-  #   ## stitch together 6 cases into the overall probability of h1 and h2 to be added to the likelihood
-  #   Pr_h2_h1_TKP_SYLSYL <-
-  #     # prob of mat HSP for SYLSYL pair i multiplied by the haplotype probability
-  #     Pr_HSP_Mat_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_HSP_Mat +
-  #     # prob of pat HSP for SYLSYL pair i multiplied by the haplotype probability
-  #     Pr_HSP_Pat_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_HSP_Pat +
-  #     # prob of mat GPP for SYLSYL pair i multiplied by the haplotype probability
-  #     Pr_GPP_Mat_SYLSYL1[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Mat1 +
-  #     # prob of mat GPP for SYLSYL pair i multiplied by the haplotype probability
-  #     # for the problem case when grandchild is indiv 1
-  #     Pr_GPP_Mat_SYLSYL2[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Mat2 +
-  #     # prob of pat GPP for SYLSYL pair i multiplied by the haplotype probability
-  #     Pr_GPP_Pat_SYLSYL1[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Pat1 +
-  #     # prob of pat GPP for SYLSYL pair i multiplied by the haplotype probability
-  #     # for the problem case when grandchild is indiv 1
-  #     Pr_GPP_Pat_SYLSYL2[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Pat2
-  # 
-  #   #divide probability the same denominator - Pr_TKP_SYLSYL because we've established that they are
-  #   #SOKPs before we started the loop
-  #   full_hap_Pr <- Pr_h2_h1_TKP_SYLSYL/Pr_TKP_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,
-  #                                                    SLICE=TKP_l1,SLICE=TKP_s2,
-  #                                                    SLICE=TKP_y2,SLICE=TKP_l2]
-  # 
-  #   #add prob to the likelihood
-  #   nll <- nll - log(full_hap_Pr)
-  # }
+  for (i in 1:nrow(TKPairs)) {
+    #grabbing values fron the mtDNA data input
+    TKP_s1 <- TKPairs$s1[i]
+    TKP_y1 <- TKPairs$y1[i]
+    TKP_l1 <- TKPairs$l1[i]
+    TKP_s2 <- TKPairs$s2[i]
+    TKP_y2 <- TKPairs$y2[i]
+    TKP_l2 <- TKPairs$l2[i]
+
+    TKP_h1 <- TKPairs$h1[i]
+    TKP_h2 <- TKPairs$h2[i]
+
+    ## conditionalish probabilities for all four cases
+    #HSP maternal - if they match it's 1, no match 0
+    Pr_h2_h1_HSP_Mat <- ifelse(TKP_h1==TKP_h2,1,0)
+    #HSP paternal - prob of match is just the haplotype frequency
+    Pr_h2_h1_HSP_Pat <- HapFreq[TKP_h2]
+
+    #GPP maternal - nested ifelse where sex of grandparent is male/female
+    #for maternal grandmother, it is the 1/0 prob like mat HS
+    # for maternal grandfather, is the hap frequency
+    Pr_h2_h1_GPP_Mat1 <- ifelse(TKP_s1==female,ifelse(TKP_h1==TKP_h2,1,0),HapFreq[TKP_h2])
+    # case where bc of weird length stuff indiv 2 is the maternal grandparent instead of grandchild
+    Pr_h2_h1_GPP_Mat2 <- ifelse(TKP_s2==female,ifelse(TKP_h2==TKP_h1,1,0),HapFreq[TKP_h2])
+    #GPP paternal - heritance is broken so whatevs
+    Pr_h2_h1_GPP_Pat1 <- HapFreq[TKP_h2]
+    Pr_h2_h1_GPP_Pat2 <- HapFreq[TKP_h2]
+    ## stitch together 6 cases into the overall probability of h1 and h2 to be added to the likelihood
+    Pr_h2_h1_TKP_SYLSYL <-
+      # prob of mat HSP for SYLSYL pair i multiplied by the haplotype probability
+      Pr_HSP_Mat_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_HSP_Mat +
+      # prob of pat HSP for SYLSYL pair i multiplied by the haplotype probability
+      Pr_HSP_Pat_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_HSP_Pat +
+      # prob of mat GPP for SYLSYL pair i multiplied by the haplotype probability
+      Pr_GPP_Mat_SYLSYL1[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Mat1 +
+      # prob of mat GPP for SYLSYL pair i multiplied by the haplotype probability
+      # for the problem case when grandchild is indiv 1
+      Pr_GPP_Mat_SYLSYL2[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Mat2 +
+      # prob of pat GPP for SYLSYL pair i multiplied by the haplotype probability
+      Pr_GPP_Pat_SYLSYL1[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Pat1 +
+      # prob of pat GPP for SYLSYL pair i multiplied by the haplotype probability
+      # for the problem case when grandchild is indiv 1
+      Pr_GPP_Pat_SYLSYL2[SLICE=TKP_s1,SLICE=TKP_y1,SLICE=TKP_l1,SLICE=TKP_s2,SLICE=TKP_y2,SLICE=TKP_l2] * Pr_h2_h1_GPP_Pat2
+
+    #divide probability the same denominator - Pr_TKP_SYLSYL because we've established that they are
+    #SOKPs before we started the loop
+    full_hap_Pr <- Pr_h2_h1_TKP_SYLSYL/Pr_TKP_SYLSYL[SLICE=TKP_s1,SLICE=TKP_y1,
+                                                     SLICE=TKP_l1,SLICE=TKP_s2,
+                                                     SLICE=TKP_y2,SLICE=TKP_l2]
+
+    #add prob to the likelihood
+    nll <- nll - log(full_hap_Pr)
+  }
   #
   ## Age composition data
   #samp_asyl is an input created for the data

@@ -30,7 +30,7 @@ LengthQ <- cbind(MeanLength,LengthQ)
 LengthQ <- LengthQ %>% dplyr::select(-Means,-SDs)
 
 # turn lengthQ into an array
-LengthQ <- LengthQ %>% 
+LengthQ <- LengthQ %>%  
   gather(key = "lc", value = "lengthQ",-ObsSex,-OtoAge) %>% 
   separate(lc,into = c("tmp","lc"),sep = "X") %>% 
   dplyr::select(-tmp) %>% 
